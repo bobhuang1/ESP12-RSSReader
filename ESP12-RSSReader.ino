@@ -95,11 +95,6 @@ HeWeatherCurrent currentWeatherClient1;
 HeWeatherCurrent currentWeatherClient2;
 #endif
 
-//                                  BBC NEWS
-// http://feeds.bbci.co.uk/news/rss.xml?edition=us
-char newsDataServer[] = "feeds.bbci.co.uk";         // base URL of site to connect to
-char newsDataURL[] = "/news/rss.xml?edition=us";   // specific paget to conenct to
-
 #if DISPLAY_TYPE == 1
 U8G2_ST7565_LM6059_F_4W_SW_SPI display(U8G2_R2, /* clock=*/ 14, /* data=*/ 12, /* cs=*/ 13, /* dc=*/ 15, /* reset=*/ 16); // U8G2_ST7565_LM6059_F_4W_SW_SPI
 #else if DISPLAY_TYPE == 2
@@ -114,13 +109,9 @@ float previousTemp = 0;
 float previousHumidity = 0;
 int lightLevel[10];
 int draw_state = 1; // 0 - Garfield,  1 - RSS page, 2 - Local clock 3 - Fremont clock, 4 - New York clock
-#ifndef SHOW_US_CITIES
-#define DRAW_STATES 2
-#else
-#define DRAW_STATES 4
-#endif
+
 long timeSinceLastPageUpdate = 0;
-#define PAGE_UPDATE_INTERVAL 20*1000
+#define PAGE_UPDATE_INTERVAL 10*1000
 int buttonState;             // the current reading from the input pin
 int lastButtonState = LOW;   // the previous reading from the input pin
 // the following variables are unsigned longs because the time, measured in
@@ -130,7 +121,7 @@ const unsigned long debounceDelay = 30;    // the debounce time; increase if the
 
 #define LONGBUTTONPUSH 30
 int buttonPushCounter = 0;
-int majorMode = 0; // 0-Clock Mode, 1-Math Mode, 2-80 Poems, 3-300Poems-not possible out of memory
+int majorMode = 0; // 0-Clock/News Mode, 1-Math Mode, 2-80 Poems, 3-300Poems-not possible out of memory
 
 int questionCount = 0;
 const int questionTotal = 100;
@@ -148,6 +139,10 @@ const int poemTotal = 10;
 String poemText[MAXIMUM_POEM_SIZE];
 int currentPoem = 1;
 bool readPoem = false;
+
+#define NEWS_POLITICS_SIZE 10
+#define NEWS_WORLD_SIZE 10
+String newsText[NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE];
 
 
 void setup() {
@@ -196,7 +191,7 @@ void setup() {
 #else
     false
 #endif
-    , true);
+  );
 
   if (WiFi.status() != WL_CONNECTED) ESP.restart();
 
@@ -209,6 +204,7 @@ void setup() {
   drawProgress("同步时间成功,", "正在更新天气数据...");
   updateData(true);
   timeSinceLastWUpdate = millis();
+  timeSinceLastPageUpdate = millis();
 }
 
 void detectButtonPush() {
@@ -242,15 +238,8 @@ void detectButtonPush() {
                  );
         if (majorMode == 0)
         {
-          if (draw_state < DRAW_STATES)
-          {
-            draw_state++;
-            timeSinceLastPageUpdate = millis();
-          }
-          else if (draw_state >= DRAW_STATES)
-          {
-            draw_state = 1;
-          }
+          draw_state++;
+          timeSinceLastPageUpdate = millis();
         }
         else if (majorMode == 1)
         {
@@ -341,7 +330,7 @@ void loop() {
   do {
     draw();
 
-    if (majorMode == 1 || majorMode == 2)
+    if (majorMode == 2)
     {
       draw_state++;
     }
@@ -357,18 +346,7 @@ void loop() {
     if (millis() - timeSinceLastPageUpdate > PAGE_UPDATE_INTERVAL)
     {
       timeSinceLastPageUpdate = millis();
-      if (draw_state == 0)
-      {
-        draw_state = 1;
-      }
-      else if (draw_state > 1 && draw_state < DRAW_STATES)
-      {
-        draw_state++;
-      }
-      else if (draw_state >= DRAW_STATES)
-      {
-        draw_state = 1;
-      }
+      draw_state++;
     }
   }
   else if (majorMode == 1)
@@ -434,32 +412,32 @@ void draw(void) {
 void drawClock(void) {
   detectButtonPush();
 
-  if (draw_state == 0) // 0 - Garfield,  1 - RSS page, 2 - Local clock 3 - Fremont clock, 4 - New York clock
+  if (draw_state == 0) // 0 - Garfield,  1 to 20 - RSS page, 21 - Local clock 22 - Fremont clock, 23 - New York clock
   {
     display.drawXBM(31, 0, 66, 64, garfield);
   }
-  else if (draw_state == 1)
+  else if (draw_state > 0 && draw_state < NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE + 1 )
   {
-    drawNews();
+    drawNews(draw_state);
   }
-  else if (draw_state == 2)
+  else if (draw_state == NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE + 1)
   {
     drawLocal();
   }
-  else if (draw_state == 3)
+  else if (draw_state == NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE + 2)
   {
 #ifdef SHOW_US_CITIES
     drawWorldLocation("弗利蒙", usPT, currentWeather2);
 #else
-    drawNews();
+    draw_state = 1;
 #endif
   }
-  else if (draw_state == 4)
+  else if (draw_state == 23)
   {
 #ifdef SHOW_US_CITIES
     drawWorldLocation("纽约", usET, currentWeather1);
 #else
-    drawNews();
+    draw_state = 1;
 #endif
   }
   else
@@ -495,6 +473,10 @@ void updateData(bool isInitialBoot) {
     currentWeatherClient2.updateCurrent(&currentWeather2, HEWEATHER_APP_ID, HEWEATHER_LOCATION2, HEWEATHER_LANGUAGE);
 #endif
   }
+  if (isInitialBoot)
+  {
+    drawProgress("正在更新...", "国际新闻...");
+  }
   getNewsData();
   readyForWeatherUpdate = false;
 }
@@ -520,8 +502,52 @@ void drawProgress(String labelLine1, String labelLine2) {
   display.sendBuffer();
 }
 
-void drawNews() {
+void drawNews(int currentNewsLine) {
+  display.enableUTF8Print();
+  display.setFont(u8g2_font_wqy12_t_gb2312); // u8g2_font_wqy12_t_gb2312, u8g2_font_helvB08_tf
 
+  String strTemp = newsText[currentNewsLine - 1];
+
+  strTemp.trim();
+  int stringLength = strTemp.length();
+
+  if (stringLength == 0)
+  {
+    draw_state++;
+    return;
+  }
+  if (stringLength > 150)
+  {
+    strTemp = strTemp.substring(0, 150);
+    strTemp.trim();
+  }
+  int numOfLines = strTemp.length() / 30 + 1;
+
+  for (int i = 0; i < numOfLines; ++i)
+  {
+    int beginPostion = i * 30;
+    int endPosition = (i + 1) * 30;
+    if (beginPostion >= stringLength)
+    {
+      exit;
+    }
+    if (endPosition >= stringLength)
+    {
+      endPosition = stringLength;
+    }
+    String strTempLine = strTemp.substring(beginPostion, endPosition);
+    strTempLine.trim();
+    display.setCursor(0, i * 13 + 1);
+    display.print(strTempLine);
+    detectButtonPush();
+  }
+
+  String stringText = String(currentNewsLine) + "/" + String(NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE);
+  int stringWidth = display.getUTF8Width(string2char(stringText));
+  display.setCursor(128 - stringWidth, 53);
+  display.print(stringText);
+
+  display.disableUTF8Print();
 }
 
 void drawLocal() {
@@ -721,17 +747,27 @@ void drawPoem(void) {
   display.print(poemTotal);
 }
 
-void getNewsData() {
-  String line;
-  WiFiClient client;
-  Serial.print(">> Connecting to ");
-  Serial.println(newsDataServer);
+void getNewsDataDetails(char NewsServer[], char NewsURL[], int beginLine, int lineSizeLimit) {
+  int tempBeginLine = beginLine;
+  /*
+    WiFiClientSecure client;
+    int httpport = 443;
+  */
 
+  WiFiClient client;
+  int httpport = 80;
+
+  String line = "";
+#ifdef DEBUG
+  Serial.print(">> Connecting to ");
+  Serial.println(NewsServer);
+#endif
   int retryCounter = 0;
-  while (!client.connect(newsDataServer, 80))
+  while (!client.connect(NewsServer, httpport))
   {
+#ifdef DEBUG
     Serial.println(".");
-    delay(1000);
+#endif    delay(1000);
     retryCounter++;
     if (retryCounter > 10)
     {
@@ -740,24 +776,29 @@ void getNewsData() {
     }
   }
 
-  String url = newsDataURL;
+  String url = NewsURL;
+#ifdef DEBUG
   Serial.print(">> Requesting URL: ");
-  Serial.println(newsDataURL);
+  Serial.println(NewsURL);
   Serial.println("");
-  client.print(String("GET ") + url + " HTTP/1.1\r\n" + "Host: " + newsDataServer + "\r\nUser-Agent: Mozilla/4.0\r\n" +  "Connection: close\r\n\r\n");
+#endif
+  client.print(String("GET ") + url + " HTTP/1.1\r\n" + "Host: " + NewsServer + "\r\nUser-Agent: IBEDevices-ESP8266\r\n" +  "Connection: close\r\n\r\n");
 
   unsigned long timeout = millis();
   while (client.available() == 0) {
     if (millis() - timeout > 30000) {
+#ifdef DEBUG
       Serial.println(">> Client Timeout !");
+#endif
       client.stop();
       return;
     }
   }
 
+  int lineCount = 0;
   while (client.available())
   {
-    line = client.readStringUntil('\n');
+    line = client.readStringUntil('!');
     line.replace("&#x2019;", "\'");                        //replace special characters
     line.replace("&#39;", "\'");
     line.replace("&apos;", "\'");
@@ -767,77 +808,49 @@ void getNewsData() {
     line.replace("&quot;", "\"");
     line.replace("&gt;", ">");
     line.replace("&lt;", "<");
-        Serial.println(line);
-    const String titleBeginMark = "<title><![CDATA[";
-    const String titleEndMark = "]]></title";
-    const String descriptionBeginMark = "<description><![CDATA[";
-    const String descriptionEndMark = "]]></description";
-    int titleBeginPos = line.indexOf(titleBeginMark);
+    const String titleBeginMark = "[CDATA[";
+    line.replace(titleBeginMark, "");
+    const String titleEndMark = "</title";
+    int titleBeginPos = 0;
     int titleEndPos = line.indexOf(titleEndMark);
-    if (titleBeginPos > -1 && titleEndPos > -1)
+    if (titleEndPos > -1)
     {
-      String titleText = line.substring(titleBeginPos + 16, titleEndPos - titleBeginPos);
-      if (titleText.indexOf("BBC News - Home") < 0)
+      String titleText = line.substring(titleBeginPos, titleEndPos - titleBeginPos);
+      titleText.replace("]]>", "");
+      if (titleText.indexOf("时政频道") < 0 && titleText.indexOf("时政新闻") < 0 && titleText.indexOf("Copyright") < 0 && titleText.indexOf("国际频道") < 0 && titleText.indexOf("国际新闻") < 0)
       {
-        Serial.println("Title: " + titleText);
+        titleText.trim();
+#ifdef DEBUG
+        Serial.print("Title ");
+        Serial.print(lineCount);
+        Serial.println(": " + titleText);
+#endif
+        newsText[tempBeginLine] = titleText;
+        tempBeginLine++;
+        lineCount++;
       }
+      titleText = "";
     }
-    int descriptionBeginPos = line.indexOf(descriptionBeginMark);
-    int descriptionEndPos = line.indexOf(descriptionEndMark);
-    if (descriptionBeginPos > -1 && descriptionEndPos > -1)
+    if (lineCount > lineSizeLimit)
     {
-      String descriptionText = line.substring(descriptionBeginPos + 22, descriptionBeginPos - descriptionEndPos);
-      if (descriptionText.indexOf("BBC News - Home") < 0)
-      {
-        Serial.println("Description: " + descriptionText);
-      }
+      client.stop();
+      return;
     }
-    /*
-      for (byte i = 0; i < elementsArrayLength; i++)
-      {
-        elementLength = strlen (elements[i]);
-        elementPos = line.indexOf(elements[i]);
-        endElement = line.indexOf(dataEnd);
-        if (elementPos > -1)
-        { // Found the element!!!
-      #ifdef INSTANCENUMBER
-          dataInstance++;
-      #endif
-          startBias = normalStartBias;
-          endBias = normalEndBias;
-          int lineLength = line.length();
-          if (endElement == -1)
-          {
-            Serial.println(F(">> Can't find end element: Using line end"));
-            int endPos = endElement + endBias;
-            line = line.substring(elementPos + elementLength + startBias, lineLength + endBias);
-          }
-          else
-          {
-            line = line.substring(elementPos + elementLength + startBias, endElement + endBias);
-          }
-          if (line == "")line = "-";        // if no value, replace with a dash
-          line.toCharArray(charBuf + memPos, maxDataLength);
-          elementValues[i] = charBuf + memPos;
-          memPos = memPos + line.length() + 1;
-          Serial.print(">> FOUND ");
-          Serial.print(elements[i]);
-          Serial.print("  VALUE=");
-          Serial.print(elementValues[i]);
-          Serial.print("  LENGTH=");
-          Serial.println(line.length());
-          Serial.print(">> MEMORY BUF From ");
-          Serial.print(memPos - line.length() - 1);
-          Serial.print(" To ");
-          Serial.println(memPos);
-        }
-      }
-    */
-    line = ""; // to flush the value.
+    line = "";
   }
+#ifdef DEBUG
   Serial.println();
   Serial.println("closing connection");
+#endif
   client.stop();
+}
+
+void getNewsData() {
+  // http://www.people.com.cn/rss/politics.xml world.xml
+  char newsDataServer[] = "www.people.com.cn";
+
+  getNewsDataDetails(newsDataServer, "/rss/world.xml", 0, NEWS_POLITICS_SIZE);
+  getNewsDataDetails(newsDataServer, "/rss/politics.xml", NEWS_POLITICS_SIZE, NEWS_WORLD_SIZE);
 }
 
 
