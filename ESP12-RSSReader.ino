@@ -140,8 +140,8 @@ String poemText[MAXIMUM_POEM_SIZE];
 int currentPoem = 1;
 bool readPoem = false;
 
-#define NEWS_POLITICS_SIZE 10
-#define NEWS_WORLD_SIZE 10
+#define NEWS_POLITICS_SIZE 20
+#define NEWS_WORLD_SIZE 20
 String newsText[NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE];
 
 
@@ -831,7 +831,7 @@ void getNewsDataDetails(char NewsServer[], char NewsURL[], int beginLine, int li
       }
       titleText = "";
     }
-    if (lineCount > lineSizeLimit)
+    if (lineCount >= lineSizeLimit)
     {
       client.stop();
       return;
