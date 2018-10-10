@@ -745,17 +745,11 @@ void getNewsData() {
   Serial.println(newsDataURL);
   Serial.println("");
   client.print(String("GET ") + url + " HTTP/1.1\r\n" + "Host: " + newsDataServer + "\r\nUser-Agent: Mozilla/4.0\r\n" +  "Connection: close\r\n\r\n");
+
   unsigned long timeout = millis();
-  retryCounter = 0;
   while (client.available() == 0) {
     if (millis() - timeout > 30000) {
       Serial.println(">> Client Timeout !");
-      client.stop();
-      return;
-    }
-    retryCounter++;
-    if (retryCounter > 10)
-    {
       client.stop();
       return;
     }
