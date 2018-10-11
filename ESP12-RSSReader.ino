@@ -15,7 +15,7 @@
 #include "HeWeatherCurrent.h"
 #include "GarfieldCommon.h"
 
-#define DEBUG
+//#define DEBUG
 #define DISPLAY_TYPE 2   // 1-BIG 12864, 2-MINI 12864
 //#define USE_WIFI_MANAGER     // disable to NOT use WiFi manager, enable to use
 //#define SHOW_US_CITIES  // disable to NOT to show Fremont and NY, enable to show
@@ -140,9 +140,9 @@ String poemText[MAXIMUM_POEM_SIZE];
 int currentPoem = 1;
 bool readPoem = false;
 
-#define NEWS_POLITICS_SIZE 20
+#define NEWS_POLITICS_SIZE 10
 #define NEWS_WORLD_SIZE 20
-#define NEWS_ENGLISH_SIZE 20
+#define NEWS_ENGLISH_SIZE 10
 String newsText[NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE + NEWS_ENGLISH_SIZE];
 
 
@@ -417,15 +417,22 @@ void drawClock(void) {
   {
     display.drawXBM(31, 0, 66, 64, garfield);
   }
-  else if (draw_state > 0 && draw_state < NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE + 1 )
+  else if (draw_state > 0 && draw_state < NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE + NEWS_ENGLISH_SIZE + 1 )
   {
-    drawChineseNews(draw_state);
+    if (draw_state < NEWS_ENGLISH_SIZE + 1)
+    {
+      drawEnglishNews(draw_state);
+    }
+    else
+    {
+      drawChineseNews(draw_state);
+    }
   }
-  else if (draw_state == NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE + 1)
+  else if (draw_state == NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE + NEWS_ENGLISH_SIZE + 1)
   {
     drawLocal();
   }
-  else if (draw_state == NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE + 2)
+  else if (draw_state == NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE + NEWS_ENGLISH_SIZE + 2)
   {
 #ifdef SHOW_US_CITIES
     drawWorldLocation("弗利蒙", usPT, currentWeather2);
@@ -474,17 +481,19 @@ void updateData(bool isInitialBoot) {
     currentWeatherClient2.updateCurrent(&currentWeather2, HEWEATHER_APP_ID, HEWEATHER_LOCATION2, HEWEATHER_LANGUAGE);
 #endif
   }
-  if (isInitialBoot)
-  {
-    drawProgress("正在更新...", "国际新闻...");
-  }
-  getChineseNewsData();
 
+  delay(300);
   if (isInitialBoot)
   {
     drawProgress("正在更新...", "英语新闻...");
   }
   getEnglishNewsData();
+  delay(300);
+  if (isInitialBoot)
+  {
+    drawProgress("正在更新...", "中文新闻...");
+  }
+  getChineseNewsData();
   readyForWeatherUpdate = false;
 }
 
@@ -513,6 +522,7 @@ void drawChineseNews(int currentNewsLine) {
   display.enableUTF8Print();
   display.setFont(u8g2_font_wqy12_t_gb2312); // u8g2_font_wqy12_t_gb2312, u8g2_font_helvB08_tf
 
+  int charsPerLine = 30;
   String strTemp = newsText[currentNewsLine - 1];
 
   strTemp.trim();
@@ -523,17 +533,17 @@ void drawChineseNews(int currentNewsLine) {
     draw_state++;
     return;
   }
-  if (stringLength > 150)
+  if (stringLength > charsPerLine * 5 - 5)
   {
-    strTemp = strTemp.substring(0, 150);
+    strTemp = strTemp.substring(0, charsPerLine * 5 - 5);
     strTemp.trim();
   }
-  int numOfLines = strTemp.length() / 30 + 1;
+  int numOfLines = strTemp.length() / charsPerLine + 1;
 
   for (int i = 0; i < numOfLines; ++i)
   {
-    int beginPostion = i * 30;
-    int endPosition = (i + 1) * 30;
+    int beginPostion = i * charsPerLine;
+    int endPosition = (i + 1) * charsPerLine;
     if (beginPostion >= stringLength)
     {
       exit;
@@ -549,12 +559,58 @@ void drawChineseNews(int currentNewsLine) {
     detectButtonPush();
   }
 
-  String stringText = String(currentNewsLine) + "/" + String(NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE);
+  String stringText = String(currentNewsLine) + "/" + String(NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE + NEWS_ENGLISH_SIZE);
   int stringWidth = display.getUTF8Width(string2char(stringText));
   display.setCursor(128 - stringWidth, 53);
   display.print(stringText);
 
   display.disableUTF8Print();
+}
+
+void drawEnglishNews(int currentNewsLine) {
+  display.setFont(u8g2_font_t0_12b_mf); // width 8, height 11 u8g2_font_t0_12b_mf, 6X11
+  int charsPerLine = 128 / 6;
+  String strTemp = newsText[currentNewsLine - 1];
+
+  strTemp.trim();
+  int stringLength = strTemp.length();
+
+  if (stringLength == 0)
+  {
+    draw_state++;
+    return;
+  }
+  if (stringLength > charsPerLine * 5 - 5)
+  {
+    strTemp = strTemp.substring(0, charsPerLine * 5 - 5);
+    strTemp.trim();
+  }
+  int numOfLines = strTemp.length() / charsPerLine + 1;
+
+  for (int i = 0; i < numOfLines; ++i)
+  {
+    int beginPostion = i * charsPerLine;
+    int endPosition = (i + 1) * charsPerLine;
+    if (beginPostion >= stringLength)
+    {
+      exit;
+    }
+    if (endPosition >= stringLength)
+    {
+      endPosition = stringLength;
+    }
+    String strTempLine = strTemp.substring(beginPostion, endPosition);
+    strTempLine.trim();
+    display.setCursor(0, i * 13 + 1);
+    display.print(strTempLine);
+    detectButtonPush();
+  }
+
+  String stringText = String(currentNewsLine) + "/" + String(NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE + NEWS_ENGLISH_SIZE);
+  int stringWidth = display.getStrWidth(string2char(stringText));
+  display.setCursor(128 - stringWidth, 53);
+  display.print(stringText);
+
 }
 
 void drawLocal() {
@@ -806,26 +862,33 @@ void getChineseNewsDataDetails(char NewsServer[], char NewsURL[], int beginLine,
   while (client.available())
   {
     line = client.readStringUntil('!');
-    line.replace("&#x2019;", "\'");                        //replace special characters
-    line.replace("&#39;", "\'");
-    line.replace("&apos;", "\'");
-    line.replace("’", "\'");
-    line.replace("‘", "\'");
-    line.replace("&amp;", "&");
-    line.replace("&quot;", "\"");
-    line.replace("&gt;", ">");
-    line.replace("&lt;", "<");
     const String titleBeginMark = "[CDATA[";
-    line.replace(titleBeginMark, "");
-    const String titleEndMark = "</title";
+    const String titleEndMark = "</title>";
     int titleBeginPos = 0;
     int titleEndPos = line.indexOf(titleEndMark);
     if (titleEndPos > -1)
     {
+      line.replace("&#x2019;", "\'");                        //replace special characters
+      line.replace("&#39;", "\'");
+      line.replace("&apos;", "\'");
+      line.replace("’", "\'");
+      line.replace("‘", "\'");
+      line.replace("&amp;", "&");
+      line.replace("&quot;", "\"");
+      line.replace("&gt;", ">");
+      line.replace("&lt;", "<");
+      line.replace(titleBeginMark, "");
+      line.replace(titleEndMark, "");
+      line.trim();
       String titleText = line.substring(titleBeginPos, titleEndPos - titleBeginPos);
       titleText.replace("]]>", "");
       if (titleText.indexOf("时政频道") < 0 && titleText.indexOf("时政新闻") < 0 && titleText.indexOf("Copyright") < 0 && titleText.indexOf("国际频道") < 0 && titleText.indexOf("国际新闻") < 0)
       {
+        titleText.replace("‘", "\'");
+        titleText.replace("’", "\'");
+        titleText.replace("“", "\"");
+        titleText.replace("”", "\"");
+        titleText.replace("·", "-");
         titleText.trim();
 #ifdef DEBUG
         Serial.print("Title ");
@@ -852,23 +915,14 @@ void getChineseNewsDataDetails(char NewsServer[], char NewsURL[], int beginLine,
   client.stop();
 }
 
-void getChineseNewsData() {
-  // http://www.people.com.cn/rss/politics.xml world.xml
-  char newsDataServer[] = "www.people.com.cn";
-
-  getChineseNewsDataDetails(newsDataServer, "/rss/world.xml", 0, NEWS_POLITICS_SIZE);
-  getChineseNewsDataDetails(newsDataServer, "/rss/politics.xml", NEWS_POLITICS_SIZE, NEWS_WORLD_SIZE);
-}
-
 void getEnglishNewsDataDetails(char NewsServer[], char NewsURL[], int beginLine, int lineSizeLimit) {
   int tempBeginLine = beginLine;
-  WiFiClientSecure client;
-  int httpport = 443;
-
   /*
-    WiFiClient client;
-    int httpport = 80;
+    WiFiClientSecure client;
+    int httpport = 443;
   */
+  WiFiClient client;
+  int httpport = 80;
 
   String line = "";
 #ifdef DEBUG
@@ -888,7 +942,6 @@ void getEnglishNewsDataDetails(char NewsServer[], char NewsURL[], int beginLine,
       return;
     }
   }
-
   String url = NewsURL;
 #ifdef DEBUG
   Serial.print(">> Requesting URL: ");
@@ -911,20 +964,37 @@ void getEnglishNewsDataDetails(char NewsServer[], char NewsURL[], int beginLine,
   int lineCount = 0;
   while (client.available())
   {
-    line = client.readStringUntil('<');
-    Serial.println(line);
-    line.replace("&#x2019;", "\'");                        //replace special characters
-    line.replace("&#39;", "\'");
-    line.replace("&apos;", "\'");
-    line.replace("’", "\'");
-    line.replace("‘", "\'");
-    line.replace("&amp;", "&");
-    line.replace("&quot;", "\"");
-    line.replace("&gt;", ">");
-    line.replace("&lt;", "<");
-    line.trim();
-    const String titleBeginMark = "title>";
-    Serial.println(line.substring(0, 6));
+    line = client.readStringUntil('\n');
+    const String titleBeginMark = "<title>";
+    const String titleEndMark = "</title>";
+    if (line.indexOf(titleBeginMark) > -1 && line.indexOf(titleEndMark) > -1)
+    {
+      line.replace("&#x2019;", "\'");                        //replace special characters
+      line.replace("&#39;", "\'");
+      line.replace("&apos;", "\'");
+      line.replace("’", "\'");
+      line.replace("‘", "\'");
+      line.replace("&amp;", "&");
+      line.replace("&quot;", "\"");
+      line.replace("&gt;", ">");
+      line.replace("&lt;", "<");
+      line.replace(titleBeginMark, "");
+      line.replace(titleEndMark, "");
+      line.trim();
+      if (line.indexOf("USATODAY - News Top") < 0 && line.indexOf("GANNETT Syndication") < 0)
+      {
+        line.replace("&apos;", "\'");
+#ifdef DEBUG
+        Serial.print("Title ");
+        Serial.print(lineCount);
+        Serial.print(": ");
+        Serial.println(line);
+#endif
+        newsText[tempBeginLine] = line;
+        tempBeginLine++;
+        lineCount++;
+      }
+    }
     if (line.substring(0, 6) == titleBeginMark)
     {
       line.replace(titleBeginMark, "");
@@ -942,7 +1012,6 @@ void getEnglishNewsDataDetails(char NewsServer[], char NewsURL[], int beginLine,
         lineCount++;
       }
     }
-
     if (lineCount >= lineSizeLimit)
     {
       client.stop();
@@ -958,9 +1027,17 @@ void getEnglishNewsDataDetails(char NewsServer[], char NewsURL[], int beginLine,
 }
 
 void getEnglishNewsData() {
-  // https://www.yahoo.com/news/rss
-  char newsDataServer[] = "www.yahoo.com";
+  // http://rssfeeds.usatoday.com/usatoday-newstopstories&x=1
+  char newsDataServer[] = "rssfeeds.usatoday.com";
 
-  getEnglishNewsDataDetails(newsDataServer, "/news/rss", NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE, NEWS_ENGLISH_SIZE);
+  getEnglishNewsDataDetails(newsDataServer, "/usatoday-newstopstories&x=1", 0, NEWS_ENGLISH_SIZE); // NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE, NEWS_ENGLISH_SIZE
+}
+
+void getChineseNewsData() {
+  // http://www.people.com.cn/rss/politics.xml world.xml
+  char newsDataServer[] = "www.people.com.cn";
+
+  getChineseNewsDataDetails(newsDataServer, "/rss/world.xml", NEWS_ENGLISH_SIZE, NEWS_WORLD_SIZE);
+  getChineseNewsDataDetails(newsDataServer, "/rss/politics.xml", NEWS_ENGLISH_SIZE + NEWS_WORLD_SIZE, NEWS_POLITICS_SIZE);
 }
 
