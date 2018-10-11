@@ -142,7 +142,8 @@ bool readPoem = false;
 
 #define NEWS_POLITICS_SIZE 20
 #define NEWS_WORLD_SIZE 20
-String newsText[NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE];
+#define NEWS_ENGLISH_SIZE 20
+String newsText[NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE + NEWS_ENGLISH_SIZE];
 
 
 void setup() {
@@ -478,6 +479,12 @@ void updateData(bool isInitialBoot) {
     drawProgress("正在更新...", "国际新闻...");
   }
   getChineseNewsData();
+
+  if (isInitialBoot)
+  {
+    drawProgress("正在更新...", "英语新闻...");
+  }
+  getEnglishNewsData();
   readyForWeatherUpdate = false;
 }
 
@@ -853,4 +860,107 @@ void getChineseNewsData() {
   getChineseNewsDataDetails(newsDataServer, "/rss/politics.xml", NEWS_POLITICS_SIZE, NEWS_WORLD_SIZE);
 }
 
+void getEnglishNewsDataDetails(char NewsServer[], char NewsURL[], int beginLine, int lineSizeLimit) {
+  int tempBeginLine = beginLine;
+  WiFiClientSecure client;
+  int httpport = 443;
+
+  /*
+    WiFiClient client;
+    int httpport = 80;
+  */
+
+  String line = "";
+#ifdef DEBUG
+  Serial.print(">> Connecting to ");
+  Serial.println(NewsServer);
+#endif
+  int retryCounter = 0;
+  while (!client.connect(NewsServer, httpport))
+  {
+#ifdef DEBUG
+    Serial.println(".");
+#endif    delay(1000);
+    retryCounter++;
+    if (retryCounter > 10)
+    {
+      client.stop();
+      return;
+    }
+  }
+
+  String url = NewsURL;
+#ifdef DEBUG
+  Serial.print(">> Requesting URL: ");
+  Serial.println(NewsURL);
+  Serial.println("");
+#endif
+  client.print(String("GET ") + url + " HTTP/1.1\r\n" + "Host: " + NewsServer + "\r\nUser-Agent: Mozilla/5.0\r\n" +  "Connection: close\r\n\r\n");
+
+  unsigned long timeout = millis();
+  while (client.available() == 0) {
+    if (millis() - timeout > 30000) {
+#ifdef DEBUG
+      Serial.println(">> Client Timeout !");
+#endif
+      client.stop();
+      return;
+    }
+  }
+  client.setTimeout(30000);
+  int lineCount = 0;
+  while (client.available())
+  {
+    line = client.readStringUntil('<');
+    Serial.println(line);
+    line.replace("&#x2019;", "\'");                        //replace special characters
+    line.replace("&#39;", "\'");
+    line.replace("&apos;", "\'");
+    line.replace("’", "\'");
+    line.replace("‘", "\'");
+    line.replace("&amp;", "&");
+    line.replace("&quot;", "\"");
+    line.replace("&gt;", ">");
+    line.replace("&lt;", "<");
+    line.trim();
+    const String titleBeginMark = "title>";
+    Serial.println(line.substring(0, 6));
+    if (line.substring(0, 6) == titleBeginMark)
+    {
+      line.replace(titleBeginMark, "");
+      line.trim();
+      if (line.indexOf("Yahoo News - Latest") < 0)
+      {
+#ifdef DEBUG
+        Serial.print("Title ");
+        Serial.print(lineCount);
+        Serial.print(": ");
+        Serial.println(line);
+#endif
+        newsText[tempBeginLine] = line;
+        tempBeginLine++;
+        lineCount++;
+      }
+    }
+
+    if (lineCount >= lineSizeLimit)
+    {
+      client.stop();
+      return;
+    }
+    line = "";
+  }
+#ifdef DEBUG
+  Serial.println();
+  Serial.println("closing connection");
+#endif
+  client.stop();
+}
+
+void getEnglishNewsData() {
+  // https://www.yahoo.com/news/rss
+  char newsDataServer[] = "www.yahoo.com";
+
+  getEnglishNewsDataDetails(newsDataServer, "/news/rss", NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE, NEWS_ENGLISH_SIZE);
+}
 
