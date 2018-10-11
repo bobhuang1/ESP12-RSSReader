@@ -418,7 +418,7 @@ void drawClock(void) {
   }
   else if (draw_state > 0 && draw_state < NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE + 1 )
   {
-    drawNews(draw_state);
+    drawChineseNews(draw_state);
   }
   else if (draw_state == NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE + 1)
   {
@@ -477,7 +477,7 @@ void updateData(bool isInitialBoot) {
   {
     drawProgress("正在更新...", "国际新闻...");
   }
-  getNewsData();
+  getChineseNewsData();
   readyForWeatherUpdate = false;
 }
 
@@ -502,7 +502,7 @@ void drawProgress(String labelLine1, String labelLine2) {
   display.sendBuffer();
 }
 
-void drawNews(int currentNewsLine) {
+void drawChineseNews(int currentNewsLine) {
   display.enableUTF8Print();
   display.setFont(u8g2_font_wqy12_t_gb2312); // u8g2_font_wqy12_t_gb2312, u8g2_font_helvB08_tf
 
@@ -747,7 +747,7 @@ void drawPoem(void) {
   display.print(poemTotal);
 }
 
-void getNewsDataDetails(char NewsServer[], char NewsURL[], int beginLine, int lineSizeLimit) {
+void getChineseNewsDataDetails(char NewsServer[], char NewsURL[], int beginLine, int lineSizeLimit) {
   int tempBeginLine = beginLine;
   /*
     WiFiClientSecure client;
@@ -845,12 +845,12 @@ void getNewsDataDetails(char NewsServer[], char NewsURL[], int beginLine, int li
   client.stop();
 }
 
-void getNewsData() {
+void getChineseNewsData() {
   // http://www.people.com.cn/rss/politics.xml world.xml
   char newsDataServer[] = "www.people.com.cn";
 
-  getNewsDataDetails(newsDataServer, "/rss/world.xml", 0, NEWS_POLITICS_SIZE);
-  getNewsDataDetails(newsDataServer, "/rss/politics.xml", NEWS_POLITICS_SIZE, NEWS_WORLD_SIZE);
+  getChineseNewsDataDetails(newsDataServer, "/rss/world.xml", 0, NEWS_POLITICS_SIZE);
+  getChineseNewsDataDetails(newsDataServer, "/rss/politics.xml", NEWS_POLITICS_SIZE, NEWS_WORLD_SIZE);
 }
 
 
