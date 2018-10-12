@@ -119,7 +119,12 @@ int lastButtonState = LOW;   // the previous reading from the input pin
 unsigned long lastDebounceTime = 0;  // the last time the output pin was toggled
 const unsigned long debounceDelay = 30;    // the debounce time; increase if the output flickers
 
+#if DISPLAY_TYPE == 1
 #define LONGBUTTONPUSH 30
+#else if DISPLAY_TYPE == 2
+#define LONGBUTTONPUSH 80
+#endif
+
 int buttonPushCounter = 0;
 int majorMode = 0; // 0-Clock/News Mode, 1-Math Mode, 2-80 Poems, 3-300Poems-not possible out of memory
 
