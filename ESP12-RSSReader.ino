@@ -381,10 +381,12 @@ void loop() {
     float fltHumidity = dht.readHumidity();
     float fltCTemp = dht.readTemperature() - 1;
 #ifdef DEBUG
+/*
     Serial.print("Humidity: ");
     Serial.println(fltHumidity);
     Serial.print("CTemp: ");
     Serial.println(fltCTemp);
+*/
 #endif
     if (isnan(fltCTemp) || isnan(fltHumidity))
     {
