@@ -18,7 +18,7 @@
 //#define DEBUG
 #define DISPLAY_TYPE 2   // 1-BIG 12864, 2-MINI 12864
 //#define USE_WIFI_MANAGER     // disable to NOT use WiFi manager, enable to use
-//#define SHOW_US_CITIES  // disable to NOT to show Fremont and NY, enable to show
+//#define SHOW_US_CITIES  // disable to NOT to show Fremont and NY, enable to show - do NOT use, causes heap to overflow
 #define USE_HIGH_ALARM       // disable - LOW alarm sounds, enable - HIGH alarm sounds
 #define LANGUAGE_CN  // LANGUAGE_CN or LANGUAGE_EN
 
@@ -38,6 +38,11 @@ const String HEWEATHER_LANGUAGE = "en"; // zh for Chinese, en for English
 const String HEWEATHER_LOCATION = "auto_ip"; // Get location from IP address
 #else
 const String HEWEATHER_LOCATION = "CN101210202"; // Changxing
+#endif
+
+#ifdef SHOW_US_CITIES
+const String HEWEATHER_LOCATION1 = "US3290117";
+const String HEWEATHER_LOCATION2 = "US5392171";
 #endif
 
 #ifdef LANGUAGE_CN
