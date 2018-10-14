@@ -15,7 +15,7 @@
 #include "HeWeatherCurrent.h"
 #include "GarfieldCommon.h"
 
-//#define DEBUG
+#define DEBUG
 #define DISPLAY_TYPE 2   // 1-BIG 12864, 2-MINI 12864
 //#define USE_WIFI_MANAGER     // disable to NOT use WiFi manager, enable to use
 //#define SHOW_US_CITIES  // disable to NOT to show Fremont and NY, enable to show - do NOT use, causes heap to overflow
@@ -150,8 +150,8 @@ String poemText[MAXIMUM_POEM_SIZE];
 int currentPoem = 1;
 bool readPoem = false;
 
-#define NEWS_POLITICS_SIZE 10
-#define NEWS_WORLD_SIZE 20
+#define NEWS_POLITICS_SIZE 5
+#define NEWS_WORLD_SIZE 10
 #define NEWS_ENGLISH_SIZE 10
 String newsText[NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE + NEWS_ENGLISH_SIZE];
 
@@ -892,26 +892,35 @@ void getChineseNewsDataDetails(char NewsServer[], char NewsURL[], int beginLine,
       line.replace(titleBeginMark, "");
       line.replace(titleEndMark, "");
       line.trim();
-      String titleText = line.substring(titleBeginPos, titleEndPos - titleBeginPos);
-      titleText.replace("]]>", "");
-      if (titleText.indexOf("时政频道") < 0 && titleText.indexOf("时政新闻") < 0 && titleText.indexOf("Copyright") < 0 && titleText.indexOf("国际频道") < 0 && titleText.indexOf("国际新闻") < 0)
+      line = line.substring(titleBeginPos, titleEndPos - titleBeginPos);
+      line.replace("]]>", "");
+      if (line.indexOf("时政频道") < 0 && line.indexOf("时政新闻") < 0 && line.indexOf("Copyright") < 0 && line.indexOf("国际频道") < 0 && line.indexOf("国际新闻") < 0)
       {
-        titleText.replace("‘", "\'");
-        titleText.replace("’", "\'");
-        titleText.replace("“", "\"");
-        titleText.replace("”", "\"");
-        titleText.replace("·", "-");
-        titleText.trim();
+        line.replace("‘", "\'");
+        line.replace("’", "\'");
+        line.replace("“", "\"");
+        line.replace("”", "\"");
+        line.replace("·", "-");
+        line.replace("【", "[");
+        line.replace("】", "]");
+        line.replace("（", "(");
+        line.replace("）", ")");
+        line.replace("《", "<");
+        line.replace("》", ">");
+        line.replace("—", "-");
+        line.replace("：", ":");
+        line.replace("；", ";");
+        line.replace("？", "?");
+        line.trim();
 #ifdef DEBUG
         Serial.print("Title ");
         Serial.print(lineCount);
-        Serial.println(": " + titleText);
+        Serial.println(": " + line);
 #endif
-        newsText[tempBeginLine] = titleText;
+        newsText[tempBeginLine] = line;
         tempBeginLine++;
         lineCount++;
       }
-      titleText = "";
     }
     if (lineCount >= lineSizeLimit)
     {
