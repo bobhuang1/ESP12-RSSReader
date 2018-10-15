@@ -21,6 +21,7 @@
 //#define SHOW_US_CITIES  // disable to NOT to show Fremont and NY, enable to show - do NOT use, causes heap to overflow
 #define USE_HIGH_ALARM       // disable - LOW alarm sounds, enable - HIGH alarm sounds
 #define LANGUAGE_CN  // LANGUAGE_CN or LANGUAGE_EN
+//#define BACKLIGHT_OFF_MODE // turn off backlight between 0:00AM and 7:00AM
 
 #define DHTTYPE  DHT11       // Sensor type DHT11/21/22/AM2301/AM2302
 #define BUTTONPIN   4
@@ -334,7 +335,22 @@ void loop() {
     readPoem = false;
   }
 
+#ifdef  BACKLIGHT_OFF_MODE
+  nowTime = time(nullptr);
+  struct tm* timeInfo;
+  timeInfo = localtime(&nowTime);
+  if (timeInfo->tm_hour >= 0 && timeInfo->tm_hour < 7)
+  {
+    tunOffBacklight(BACKLIGHTPIN);
+  }
+  else
+  {
+    adjustBacklight(lightLevel, BACKLIGHTPIN);
+  }
+#else
   adjustBacklight(lightLevel, BACKLIGHTPIN);
+#endif
+  
   detectButtonPush();
 
   display.firstPage();
