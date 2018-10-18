@@ -15,13 +15,13 @@
 #include "HeWeatherCurrent.h"
 #include "GarfieldCommon.h"
 
-#define DEBUG
+//#define DEBUG
 #define DISPLAY_TYPE 2   // 1-BIG 12864, 2-MINI 12864
 //#define USE_WIFI_MANAGER     // disable to NOT use WiFi manager, enable to use
 //#define SHOW_US_CITIES  // disable to NOT to show Fremont and NY, enable to show - do NOT use, causes heap to overflow
 #define USE_HIGH_ALARM       // disable - LOW alarm sounds, enable - HIGH alarm sounds
 #define LANGUAGE_CN  // LANGUAGE_CN or LANGUAGE_EN
-//#define BACKLIGHT_OFF_MODE // turn off backlight between 0:00AM and 7:00AM
+#define BACKLIGHT_OFF_MODE // turn off backlight between 0:00AM and 7:00AM
 
 #define DHTTYPE  DHT11       // Sensor type DHT11/21/22/AM2301/AM2302
 #define BUTTONPIN   4
@@ -899,8 +899,6 @@ void getChineseNewsDataDetails(char NewsServer[], char NewsURL[], int beginLine,
       line.replace("&#x2019;", "\'");                        //replace special characters
       line.replace("&#39;", "\'");
       line.replace("&apos;", "\'");
-      line.replace("’", "\'");
-      line.replace("‘", "\'");
       line.replace("&amp;", "&");
       line.replace("&quot;", "\"");
       line.replace("&gt;", ">");
@@ -912,21 +910,6 @@ void getChineseNewsDataDetails(char NewsServer[], char NewsURL[], int beginLine,
       line.replace("]]>", "");
       if (line.indexOf("时政频道") < 0 && line.indexOf("时政新闻") < 0 && line.indexOf("Copyright") < 0 && line.indexOf("国际频道") < 0 && line.indexOf("国际新闻") < 0)
       {
-        line.replace("‘", "\'");
-        line.replace("’", "\'");
-        line.replace("“", "\"");
-        line.replace("”", "\"");
-        line.replace("·", "-");
-        line.replace("【", "[");
-        line.replace("】", "]");
-        line.replace("（", "(");
-        line.replace("）", ")");
-        line.replace("《", "<");
-        line.replace("》", ">");
-        line.replace("—", "-");
-        line.replace("：", ":");
-        line.replace("；", ";");
-        line.replace("？", "?");
         line.trim();
 #ifdef DEBUG
         Serial.print("Title ");
