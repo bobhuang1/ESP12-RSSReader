@@ -1,4 +1,4 @@
-#include <DHT.h>
+o#include <DHT.h>
 #include <DHT_U.h>
 #include <ESP8266WiFi.h>
 #include <ESPHTTPClient.h>
@@ -1003,7 +1003,10 @@ void getEnglishNewsDataDetails(char NewsServer[], char NewsURL[], int beginLine,
       line.trim();
       if (line.indexOf("USATODAY - News Top") < 0 && line.indexOf("GANNETT Syndication") < 0)
       {
-        line.replace("&apos;", "\'");
+        line.replace("&lsquo;", "\'");
+        line.replace("&rsquo;", "\'");
+        line.replace("&ldquo;", "\"");
+        line.replace("&rdquo;", "\"");
 #ifdef DEBUG
         Serial.print("Title ");
         Serial.print(lineCount);
