@@ -1,4 +1,4 @@
-o#include <DHT.h>
+#include <DHT.h>
 #include <DHT_U.h>
 #include <ESP8266WiFi.h>
 #include <ESPHTTPClient.h>
@@ -151,7 +151,7 @@ String poemText[MAXIMUM_POEM_SIZE];
 int currentPoem = 1;
 bool readPoem = false;
 
-#define NEWS_POLITICS_SIZE 5
+#define NEWS_POLITICS_SIZE 10
 #define NEWS_WORLD_SIZE 20
 #define NEWS_ENGLISH_SIZE 10
 String newsText[NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE + NEWS_ENGLISH_SIZE];
