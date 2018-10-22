@@ -350,7 +350,7 @@ void loop() {
 #else
   adjustBacklight(lightLevel, BACKLIGHTPIN);
 #endif
-  
+
   detectButtonPush();
 
   display.firstPage();
@@ -397,12 +397,12 @@ void loop() {
     float fltHumidity = dht.readHumidity();
     float fltCTemp = dht.readTemperature() - 1;
 #ifdef DEBUG
-/*
-    Serial.print("Humidity: ");
-    Serial.println(fltHumidity);
-    Serial.print("CTemp: ");
-    Serial.println(fltCTemp);
-*/
+    /*
+        Serial.print("Humidity: ");
+        Serial.println(fltHumidity);
+        Serial.print("CTemp: ");
+        Serial.println(fltCTemp);
+    */
 #endif
     if (isnan(fltCTemp) || isnan(fltHumidity))
     {
@@ -1003,6 +1003,7 @@ void getEnglishNewsDataDetails(char NewsServer[], char NewsURL[], int beginLine,
       line.trim();
       if (line.indexOf("USATODAY - News Top") < 0 && line.indexOf("GANNETT Syndication") < 0)
       {
+        line.replace("&apos;", "\'");
         line.replace("&lsquo;", "\'");
         line.replace("&rsquo;", "\'");
         line.replace("&ldquo;", "\"");
