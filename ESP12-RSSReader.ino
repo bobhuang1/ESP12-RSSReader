@@ -1003,6 +1003,7 @@ void getEnglishNewsDataDetails(char NewsServer[], char NewsURL[], int beginLine,
       line.trim();
       if (line.indexOf("USATODAY - News Top") < 0 && line.indexOf("GANNETT Syndication") < 0)
       {
+        line.replace("&nbsp;", " ");
         line.replace("&apos;", "\'");
         line.replace("&lsquo;", "\'");
         line.replace("&rsquo;", "\'");
