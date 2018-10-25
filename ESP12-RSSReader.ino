@@ -16,7 +16,7 @@
 #include "GarfieldCommon.h"
 
 //#define DEBUG
-#define DISPLAY_TYPE 2   // 1-BIG 12864, 2-MINI 12864
+#define DISPLAY_TYPE 3   // 1-BIG 12864, 2-MINI 12864, 3-New Big BLUE 12864, to use 3, you must change u8x8_d_st7565.c as well!!!
 //#define USE_WIFI_MANAGER     // disable to NOT use WiFi manager, enable to use
 //#define SHOW_US_CITIES  // disable to NOT to show Fremont and NY, enable to show - do NOT use, causes heap to overflow
 #define USE_HIGH_ALARM       // disable - LOW alarm sounds, enable - HIGH alarm sounds
@@ -28,6 +28,10 @@
 #define DHTPIN   2 // 2, -1
 #define ALARMPIN 5
 #define BACKLIGHTPIN 0 // 2, 0
+
+#if DISPLAY_TYPE == 3
+#define BIGBLUE12864
+#endif
 
 #ifdef LANGUAGE_CN
 const String HEWEATHER_LANGUAGE = "zh"; // zh for Chinese, en for English
@@ -103,8 +107,14 @@ HeWeatherCurrent currentWeatherClient2;
 
 #if DISPLAY_TYPE == 1
 U8G2_ST7565_LM6059_F_4W_SW_SPI display(U8G2_R2, /* clock=*/ 14, /* data=*/ 12, /* cs=*/ 13, /* dc=*/ 15, /* reset=*/ 16); // U8G2_ST7565_LM6059_F_4W_SW_SPI
-#else if DISPLAY_TYPE == 2
+#endif
+
+#if DISPLAY_TYPE == 2
 U8G2_ST7565_64128N_F_4W_SW_SPI display(U8G2_R0, /* clock=*/ 14, /* data=*/ 12, /* cs=*/ 13, /* dc=*/ 15, /* reset=*/ 16); // U8G2_ST7565_64128N_F_4W_SW_SPI
+#endif
+
+#if DISPLAY_TYPE == 3
+U8G2_ST7565_64128N_F_4W_SW_SPI display(U8G2_R2, /* clock=*/ 14, /* data=*/ 12, /* cs=*/ 13, /* dc=*/ 15, /* reset=*/ 16); // U8G2_ST7565_64128N_F_4W_SW_SPI
 #endif
 
 time_t nowTime;
@@ -127,8 +137,14 @@ const unsigned long debounceDelay = 30;    // the debounce time; increase if the
 
 #if DISPLAY_TYPE == 1
 #define LONGBUTTONPUSH 30
-#else if DISPLAY_TYPE == 2
+#endif
+
+#if DISPLAY_TYPE == 2
 #define LONGBUTTONPUSH 80
+#endif
+
+#if DISPLAY_TYPE == 3
+#define LONGBUTTONPUSH 40
 #endif
 
 int buttonPushCounter = 0;
@@ -184,6 +200,9 @@ void setup() {
   display.setFontPosTop();
 #if DISPLAY_TYPE == 1
   display.setContrast(135);
+#endif
+#if DISPLAY_TYPE == 3
+  display.setContrast(168);
 #endif
   display.clearBuffer();
   display.drawXBM(31, 0, 66, 64, garfield);
@@ -345,10 +364,18 @@ void loop() {
   }
   else
   {
+#if DISPLAY_TYPE == 3
+    adjustBacklight(lightLevel, BACKLIGHTPIN, 45, 500);
+#else
     adjustBacklight(lightLevel, BACKLIGHTPIN);
+#endif
   }
 #else
-  adjustBacklight(lightLevel, BACKLIGHTPIN);
+#if DISPLAY_TYPE == 3
+    adjustBacklight(lightLevel, BACKLIGHTPIN, 45, 500);
+#else
+    adjustBacklight(lightLevel, BACKLIGHTPIN);
+#endif
 #endif
 
   detectButtonPush();
