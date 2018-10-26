@@ -18,7 +18,7 @@
 //#define DEBUG
 #define DISPLAY_TYPE 3   // 1-BIG 12864, 2-MINI 12864, 3-New Big BLUE 12864, to use 3, you must change u8x8_d_st7565.c as well!!!
 //#define USE_WIFI_MANAGER     // disable to NOT use WiFi manager, enable to use
-//#define SHOW_US_CITIES  // disable to NOT to show Fremont and NY, enable to show - do NOT use, causes heap to overflow
+#define SHOW_US_CITIES  // disable to NOT to show Fremont and NY, enable to show - do NOT use, causes heap to overflow
 #define USE_HIGH_ALARM       // disable - LOW alarm sounds, enable - HIGH alarm sounds
 #define LANGUAGE_CN  // LANGUAGE_CN or LANGUAGE_EN
 #define BACKLIGHT_OFF_MODE // turn off backlight between 0:00AM and 7:00AM
@@ -135,41 +135,12 @@ int lastButtonState = LOW;   // the previous reading from the input pin
 unsigned long lastDebounceTime = 0;  // the last time the output pin was toggled
 const unsigned long debounceDelay = 30;    // the debounce time; increase if the output flickers
 
-#if DISPLAY_TYPE == 1
-#define LONGBUTTONPUSH 30
-#endif
-
-#if DISPLAY_TYPE == 2
-#define LONGBUTTONPUSH 80
-#endif
-
-#if DISPLAY_TYPE == 3
-#define LONGBUTTONPUSH 40
-#endif
-
 int buttonPushCounter = 0;
-int majorMode = 0; // 0-Clock/News Mode, 1-Math Mode, 2-80 Poems, 3-300Poems-not possible out of memory
-
-int questionCount = 0;
-const int questionTotal = 100;
-int currentMode = 0; // 0 - show question, 1 - show answer
-String currentQuestion = "";
-String currentAnswer = "";
-
 int lineCount = 0;
-int lineTotal = 1;
-int poemCount = 1;
-const int poemTotal = 10;
-#define TOTAL_POEMS  96 // Total number of poems
-#define MAXIMUM_POEM_SIZE 11 //11 for 80 poems, 121 for 300 poems
 
-String poemText[MAXIMUM_POEM_SIZE];
-int currentPoem = 1;
-bool readPoem = false;
-
-#define NEWS_POLITICS_SIZE 10
-#define NEWS_WORLD_SIZE 20
-#define NEWS_ENGLISH_SIZE 10
+#define NEWS_POLITICS_SIZE 20
+#define NEWS_WORLD_SIZE 40
+#define NEWS_ENGLISH_SIZE 40
 String newsText[NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE + NEWS_ENGLISH_SIZE];
 
 
@@ -267,43 +238,8 @@ void detectButtonPush() {
                   false
 #endif
                  );
-        if (majorMode == 0)
-        {
-          draw_state++;
-          timeSinceLastPageUpdate = millis();
-        }
-        else if (majorMode == 1)
-        {
-          if (currentMode == 0)
-          {
-            currentMode = 1;
-          }
-          else
-          {
-            currentMode = 0;
-            currentQuestion = generateMathQuestion(currentAnswer);
-            questionCount++;
-            if (questionCount >= questionTotal + 1)
-            {
-              questionCount = 1;
-            }
-          }
-        }
-        else if (majorMode == 2)
-        {
-          lineCount++;
-          if (lineCount >= lineTotal)
-          {
-            lineCount = 0;
-            currentPoem = random(1, TOTAL_POEMS + 1);
-            readPoem = true;
-            poemCount++;
-            if (poemCount >= poemTotal + 1)
-            {
-              poemCount = 0;
-            }
-          }
-        }
+        draw_state++;
+        timeSinceLastPageUpdate = millis();
       }
       else
       {
@@ -315,45 +251,6 @@ void detectButtonPush() {
 }
 
 void loop() {
-  if (buttonPushCounter >= LONGBUTTONPUSH)
-  {
-    buttonPushCounter = 0;
-    draw_state = 0;
-    if (majorMode == 0)
-    {
-      majorMode = 1; // we are in Math mode, need to initialize all variables
-      questionCount = 0;
-      currentMode = 0; // 0 - show question, 1 - show answer
-      currentQuestion = generateMathQuestion(currentAnswer);
-    }
-    else if (majorMode == 1)
-    {
-      majorMode = 2; // we are in 80 Poem mode
-      currentPoem = random(1, TOTAL_POEMS + 1);
-      lineCount = 0;
-      poemCount = 1;
-      readPoem = true;
-    }
-    else
-    {
-      majorMode = 0; // we are in Clock mode
-    }
-    longBeep(ALARMPIN,
-#ifdef USE_HIGH_ALARM
-             true
-#else
-             false
-#endif
-            );
-  }
-
-  if (majorMode == 2 && readPoem)
-  {
-    String strFileName = convertPoemNumberToFileName(currentPoem, TOTAL_POEMS);
-    readPoemFromSPIFFS(strFileName, poemText, lineTotal);
-    readPoem = false;
-  }
-
 #ifdef  BACKLIGHT_OFF_MODE
   nowTime = time(nullptr);
   struct tm* timeInfo;
@@ -372,9 +269,9 @@ void loop() {
   }
 #else
 #if DISPLAY_TYPE == 3
-    adjustBacklight(lightLevel, BACKLIGHTPIN, 45, 500);
+  adjustBacklight(lightLevel, BACKLIGHTPIN, 45, 500);
 #else
-    adjustBacklight(lightLevel, BACKLIGHTPIN);
+  adjustBacklight(lightLevel, BACKLIGHTPIN);
 #endif
 #endif
 
@@ -383,11 +280,6 @@ void loop() {
   display.firstPage();
   do {
     draw();
-
-    if (majorMode == 2)
-    {
-      draw_state++;
-    }
   } while ( display.nextPage() );
 
   if (millis() - timeSinceLastWUpdate > (1000 * UPDATE_INTERVAL_SECS)) {
@@ -395,27 +287,10 @@ void loop() {
     timeSinceLastWUpdate = millis();
   }
 
-  if (majorMode == 0)
+  if (millis() - timeSinceLastPageUpdate > PAGE_UPDATE_INTERVAL)
   {
-    if (millis() - timeSinceLastPageUpdate > PAGE_UPDATE_INTERVAL)
-    {
-      timeSinceLastPageUpdate = millis();
-      draw_state++;
-    }
-  }
-  else if (majorMode == 1)
-  {
-    if (draw_state >= 10)
-    {
-      draw_state = 0;
-    }
-  }
-  else if (majorMode == 2)
-  {
-    if (draw_state >= 121)
-    {
-      draw_state = 0;
-    }
+    timeSinceLastPageUpdate = millis();
+    draw_state++;
   }
 
 #if (DHTPIN >= 0)
@@ -449,20 +324,8 @@ void loop() {
 
 void draw(void) {
   detectButtonPush();
-  if (majorMode == 0) // Clock mode
-  {
-    drawClock();
-    detectButtonPush();
-  }
-  else if (majorMode == 1) // Math mode
-  {
-    drawMath();
-  }
-  else if (majorMode == 2) // Poem modes
-  {
-    drawPoem();
-    detectButtonPush();
-  }
+  drawClock();
+  detectButtonPush();
 }
 
 void drawClock(void) {
@@ -660,12 +523,10 @@ void drawEnglishNews(int currentNewsLine) {
     display.print(strTempLine);
     detectButtonPush();
   }
-
   String stringText = String(currentNewsLine) + "/" + String(NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE + NEWS_ENGLISH_SIZE);
   int stringWidth = display.getStrWidth(string2char(stringText));
   display.setCursor(128 - stringWidth, 53);
   display.print(stringText);
-
 }
 
 void drawLocal() {
@@ -710,20 +571,11 @@ void drawLocal() {
   {
     display.drawStr(0, 39, string2char(String(previousTemp, 0) + degree + "C"));
   }
-  else
-  {
-    //    display.drawStr(0, 39, string2char("..."));
-  }
 
   if (previousTemp != 0 && previousHumidity != 0)
   {
     int stringWidth = display.getStrWidth(string2char(String(previousHumidity, 0) + "%"));
     display.drawStr(128 - stringWidth, 39, string2char(String(previousHumidity, 0) + "%"));
-  }
-  else
-  {
-    //    int stringWidth = display.getStrWidth(string2char("..."));
-    //    display.drawStr(128 - stringWidth, 39, string2char("..."));
   }
   display.drawHLine(0, 51, 128);
 }
@@ -767,103 +619,6 @@ void drawWorldLocation(String stringText, Timezone tztTimeZone, HeWeatherCurrent
   display.drawStr(98, 17, string2char(String(currentWeather.iconMeteoCon).substring(0, 1)));
 }
 #endif
-
-void drawMath(void) {
-  nowTime = time(nullptr);
-  struct tm* timeInfo;
-  timeInfo = localtime(&nowTime);
-  char buff[20];
-  sprintf_P(buff, PSTR("%02d:%02d"), timeInfo->tm_hour, timeInfo->tm_min);
-
-  display.setFont(u8g2_font_helvB10_tf); // u8g2_font_helvB08_tf, u8g2_font_6x13_tn
-  display.setCursor(1, 1);
-  display.print(questionCount);
-  display.print("/");
-  display.print(questionTotal);
-
-  display.setCursor(90, 1);
-  display.print(buff);
-
-  display.setFont(u8g2_font_helvB12_tf); // u8g2_font_helvB08_tf, u8g2_font_10x20_tf
-  int stringWidth = display.getStrWidth(string2char(currentAnswer));
-  display.setCursor((128 - stringWidth) / 2, 28);
-  if (currentMode == 0)
-  {
-    display.print(currentQuestion);
-  }
-  else
-  {
-    display.print(currentAnswer);
-  }
-}
-
-void drawPoem(void) {
-  //    display.drawXBM(31, 0, 66, 64, garfield);
-  nowTime = time(nullptr);
-  struct tm* timeInfo;
-  timeInfo = localtime(&nowTime);
-  char buff[20];
-  sprintf_P(buff, PSTR("%02d:%02d"), timeInfo->tm_hour, timeInfo->tm_min);
-
-  int stringWidth = 0;
-
-  display.enableUTF8Print();
-  display.setFont(u8g2_font_wqy12_t_gb2312); // u8g2_font_wqy12_t_gb2312, u8g2_font_helvB08_tf
-
-  int tempLineBegin = 0;
-  int tempLineMultiply = 1;
-  int tempLineEnd = 5;
-
-  tempLineMultiply = lineCount / 5;
-  tempLineBegin = tempLineMultiply * 5;
-  tempLineEnd = tempLineBegin + 5;
-
-  if (tempLineEnd > lineCount + 1)
-  {
-    tempLineEnd = lineCount + 1;
-  }
-
-  int intMaxY = 0;
-  for (int i = tempLineBegin; i < tempLineEnd; ++i)
-  {
-    String strTemp = poemText[i];
-    if (strTemp.length() > 30)
-    {
-      // each Chinese character's length is 3 in UTF-8
-      strTemp = strTemp.substring(0, 30);
-      strTemp.trim();
-    }
-    stringWidth = display.getUTF8Width(string2char(strTemp));
-    intMaxY = (i % 5) * 13 + 1;
-    display.setCursor((128 - stringWidth) / 2, intMaxY);
-    display.print(strTemp);
-    detectButtonPush();
-  }
-  display.disableUTF8Print();
-
-  display.setFont(u8g2_font_helvB08_tf); // u8g2_font_helvB08_tf, u8g2_font_6x13_tn
-  if (intMaxY < 52)
-  {
-    display.setCursor(28, 53);
-    display.print(TOTAL_POEMS);
-    display.setCursor(70, 53);
-    display.print(buff);
-  }
-
-  display.setCursor(0, 41);
-  display.print(lineCount);
-
-  stringWidth = display.getStrWidth(string2char(String(lineTotal - 1)));
-  display.setCursor(128 - stringWidth, 41);
-  display.print(lineTotal - 1);
-
-  display.setCursor(0, 53);
-  display.print(poemCount);
-
-  stringWidth = display.getStrWidth(string2char(String(poemTotal)));
-  display.setCursor(128 - stringWidth, 53);
-  display.print(poemTotal);
-}
 
 void getChineseNewsDataDetails(char NewsServer[], char NewsURL[], int beginLine, int lineSizeLimit) {
   int tempBeginLine = beginLine;
