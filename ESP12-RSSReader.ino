@@ -492,15 +492,15 @@ void drawClock(void) {
 #ifdef SHOW_US_CITIES
     drawWorldLocation("弗利蒙", usPT, currentWeather2);
 #else
-    draw_state = 1;
+    drawLocal();
 #endif
   }
-  else if (draw_state == 23)
+  else if (draw_state == NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE + NEWS_ENGLISH_SIZE + 3)
   {
 #ifdef SHOW_US_CITIES
     drawWorldLocation("纽约", usET, currentWeather1);
 #else
-    draw_state = 1;
+    drawLocal();
 #endif
   }
   else
