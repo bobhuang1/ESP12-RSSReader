@@ -16,9 +16,9 @@
 #include "GarfieldCommon.h"
 
 //#define DEBUG
-#define DISPLAY_TYPE 3   // 1-BIG 12864, 2-MINI 12864, 3-New Big BLUE 12864, to use 3, you must change u8x8_d_st7565.c as well!!!
+#define DISPLAY_TYPE 2   // 1-BIG 12864, 2-MINI 12864, 3-New Big BLUE 12864, to use 3, you must change u8x8_d_st7565.c as well!!!
 //#define USE_WIFI_MANAGER     // disable to NOT use WiFi manager, enable to use
-#define SHOW_US_CITIES  // disable to NOT to show Fremont and NY, enable to show - do NOT use, causes heap to overflow
+//#define SHOW_US_CITIES  // disable to NOT to show Fremont and NY, enable to show - do NOT use, causes heap to overflow
 #define USE_HIGH_ALARM       // disable - LOW alarm sounds, enable - HIGH alarm sounds
 #define LANGUAGE_CN  // LANGUAGE_CN or LANGUAGE_EN
 #define BACKLIGHT_OFF_MODE // turn off backlight between 0:00AM and 7:00AM
@@ -138,10 +138,22 @@ const unsigned long debounceDelay = 30;    // the debounce time; increase if the
 int buttonPushCounter = 0;
 int lineCount = 0;
 
-#define NEWS_POLITICS_SIZE 20
+#define NEWS_POLITICS_SIZE 10
 #define NEWS_WORLD_SIZE 40
-#define NEWS_ENGLISH_SIZE 40
+#define NEWS_ENGLISH_SIZE 20
 String newsText[NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE + NEWS_ENGLISH_SIZE];
+
+#ifdef SHOW_US_CITIES
+#if (NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE + NEWS_ENGLISH_SIZE) > 35
+#error *** When SHOW_US_CITIES is used, news items should not be more than 35 ***
+#endif
+#endif
+
+#ifndef SHOW_US_CITIES
+#if (NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE + NEWS_ENGLISH_SIZE > 70)
+#error *** When SHOW_US_CITIES is not used, news items should not be more than 70 ***
+#endif
+#endif
 
 
 void setup() {
