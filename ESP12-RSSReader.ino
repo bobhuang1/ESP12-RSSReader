@@ -139,20 +139,16 @@ int buttonPushCounter = 0;
 int lineCount = 0;
 
 #define NEWS_POLITICS_SIZE 10
-#define NEWS_WORLD_SIZE 40
-#define NEWS_ENGLISH_SIZE 20
+#define NEWS_WORLD_SIZE 35
+#define NEWS_ENGLISH_SIZE 25
 String newsText[NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE + NEWS_ENGLISH_SIZE];
 
-#ifdef SHOW_US_CITIES
-#if (NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE + NEWS_ENGLISH_SIZE) > 35
+#if defined SHOW_US_CITIES && (NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE + NEWS_ENGLISH_SIZE) > 35
 #error *** When SHOW_US_CITIES is used, news items should not be more than 35 ***
 #endif
-#endif
 
-#ifndef SHOW_US_CITIES
-#if (NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE + NEWS_ENGLISH_SIZE > 70)
+#if not defined SHOW_US_CITIES && (NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE + NEWS_ENGLISH_SIZE > 70)
 #error *** When SHOW_US_CITIES is not used, news items should not be more than 70 ***
-#endif
 #endif
 
 
