@@ -16,7 +16,7 @@
 #include "GarfieldCommon.h"
 
 //#define DEBUG
-#define DISPLAY_TYPE 2   // 1-BIG 12864, 2-MINI 12864, 3-New Big BLUE 12864, to use 3, you must change u8x8_d_st7565.c as well!!!
+#define DISPLAY_TYPE 3   // 1-BIG 12864, 2-MINI 12864, 3-New Big BLUE 12864, to use 3, you must change u8x8_d_st7565.c as well!!!
 //#define USE_WIFI_MANAGER     // disable to NOT use WiFi manager, enable to use
 //#define SHOW_US_CITIES  // disable to NOT to show Fremont and NY, enable to show - do NOT use, causes heap to overflow
 #define USE_HIGH_ALARM       // disable - LOW alarm sounds, enable - HIGH alarm sounds
@@ -122,8 +122,8 @@ U8G2_ST7565_64128N_F_4W_SW_SPI display(U8G2_R0, /* clock=*/ 14, /* data=*/ 12, /
 #if DISPLAY_TYPE == 3
 U8G2_ST7565_64128N_F_4W_SW_SPI display(U8G2_R2, /* clock=*/ 14, /* data=*/ 12, /* cs=*/ 13, /* dc=*/ 15, /* reset=*/ 16); // U8G2_ST7565_64128N_F_4W_SW_SPI
 #define DISPLAY_CONTRAST 168
-#define DISPLAY_BIAS 45
-#define DISPLAY_MULTIPLIER 500
+#define DISPLAY_BIAS 30
+#define DISPLAY_MULTIPLIER 300
 #endif
 
 time_t nowTime;
@@ -148,16 +148,16 @@ int buttonPushCounter = 0;
 int lineCount = 0;
 
 #define NEWS_POLITICS_SIZE 10
-#define NEWS_WORLD_SIZE 30
-#define NEWS_ENGLISH_SIZE 20
+#define NEWS_WORLD_SIZE 20
+#define NEWS_ENGLISH_SIZE 15
 String newsText[NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE + NEWS_ENGLISH_SIZE];
 
-#if defined SHOW_US_CITIES && (NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE + NEWS_ENGLISH_SIZE) > 35
-#error *** When SHOW_US_CITIES is used, news items should not be more than 35 ***
+#if defined SHOW_US_CITIES && (NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE + NEWS_ENGLISH_SIZE) > 30
+#error *** When SHOW_US_CITIES is used, news items should not be more than 30 ***
 #endif
 
-#if not defined SHOW_US_CITIES && (NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE + NEWS_ENGLISH_SIZE > 70)
-#error *** When SHOW_US_CITIES is not used, news items should not be more than 70 ***
+#if not defined SHOW_US_CITIES && (NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE + NEWS_ENGLISH_SIZE > 45)
+#error *** When SHOW_US_CITIES is not used, news items should not be more than 45 ***
 #endif
 
 
