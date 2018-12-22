@@ -16,7 +16,7 @@
 #include "GarfieldCommon.h"
 
 //#define DEBUG
-#define DISPLAY_TYPE 2   // 1-BIG 12864, 2-MINI 12864, 3-New Big BLUE 12864, to use 3, you must change u8x8_d_st7565.c as well!!!
+#define DISPLAY_TYPE 1   // 1-BIG 12864, 2-MINI 12864, 3-New Big BLUE 12864, to use 3, you must change u8x8_d_st7565.c as well!!!
 //#define USE_WIFI_MANAGER     // disable to NOT use WiFi manager, enable to use
 //#define SHOW_US_CITIES  // disable to NOT to show Fremont and NY, enable to show - do NOT use, causes heap to overflow
 #define USE_HIGH_ALARM       // disable - LOW alarm sounds, enable - HIGH alarm sounds
@@ -108,7 +108,7 @@ HeWeatherCurrent currentWeatherClient2;
 #if DISPLAY_TYPE == 1
 U8G2_ST7565_LM6059_F_4W_SW_SPI display(U8G2_R2, /* clock=*/ 14, /* data=*/ 12, /* cs=*/ 13, /* dc=*/ 15, /* reset=*/ 16); // U8G2_ST7565_LM6059_F_4W_SW_SPI
 #define DISPLAY_CONTRAST 135
-#define DISPLAY_BIAS 25
+#define DISPLAY_BIAS -25
 #define DISPLAY_MULTIPLIER 200
 #endif
 
