@@ -281,7 +281,7 @@ void loop() {
   timeInfo = localtime(&nowTime);
   if (timeInfo->tm_hour >= 0 && timeInfo->tm_hour < 7)
   {
-    tunOffBacklight(BACKLIGHTPIN);
+    turnOffBacklight(BACKLIGHTPIN, 1);
   }
   else
   {
@@ -642,6 +642,7 @@ void getChineseNewsDataDetails(char NewsServer[], char NewsURL[], int beginLine,
     WiFiClientSecure client;
     int httpport = 443;
   */
+  if (WiFi.status() != WL_CONNECTED) return;
 
   WiFiClient client;
   int httpport = 80;
@@ -739,6 +740,8 @@ void getEnglishNewsDataDetails(char NewsServer[], char NewsURL[], int beginLine,
     WiFiClientSecure client;
     int httpport = 443;
   */
+  if (WiFi.status() != WL_CONNECTED) return;
+  
   WiFiClient client;
   int httpport = 80;
 
