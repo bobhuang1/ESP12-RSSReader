@@ -16,12 +16,34 @@
 #include "GarfieldCommon.h"
 
 //#define DEBUG
-#define DISPLAY_TYPE 1   // 1-BIG 12864, 2-MINI 12864, 3-New Big BLUE 12864, to use 3, you must change u8x8_d_st7565.c as well!!!
+#define SERIAL_NUMBER 400
 //#define USE_WIFI_MANAGER     // disable to NOT use WiFi manager, enable to use
-//#define SHOW_US_CITIES  // disable to NOT to show Fremont and NY, enable to show - do NOT use, causes heap to overflow
-#define USE_HIGH_ALARM       // disable - LOW alarm sounds, enable - HIGH alarm sounds
 #define LANGUAGE_CN  // LANGUAGE_CN or LANGUAGE_EN
 #define BACKLIGHT_OFF_MODE // turn off backlight between 0:00AM and 7:00AM
+
+#if SERIAL_NUMBER == 400
+#define DISPLAY_TYPE 1   // 1-BIG 12864, 2-MINI 12864, 3-New Big BLUE 12864, to use 3, you must change u8x8_d_st7565.c as well!!!, 4- New BLUE 12864-ST7920
+#define USE_HIGH_ALARM       // disable - LOW alarm sounds, enable - HIGH alarm sounds
+//#define SHOW_US_CITIES  // disable to NOT to show Fremont and NY, enable to show
+#endif
+
+String Location = SERIAL_NUMBER + " Default";
+String Token = "Token";
+int Resistor = 80000;
+bool dummyMode = false;
+bool backlightOffMode = false;
+bool sendAlarmEmail = false;
+String alarmEmailAddress = "Email";
+int displayContrast = 128;
+int displayMultiplier = 100;
+int displayBias = 0;
+int displayMinimumLevel = 1;
+int displayMaximumLevel = 1023;
+int temperatureMultiplier = 100;
+int temperatureBias = 0;
+int humidityMultiplier = 100;
+int humidityBias = 0;
+
 
 #define DHTTYPE  DHT11       // Sensor type DHT11/21/22/AM2301/AM2302
 #define BUTTONPIN   4
@@ -126,6 +148,15 @@ U8G2_ST7565_64128N_F_4W_SW_SPI display(U8G2_R2, /* clock=*/ 14, /* data=*/ 12, /
 #define DISPLAY_MULTIPLIER 300
 #endif
 
+#if DISPLAY_TYPE == 4
+U8G2_ST7920_128X64_F_SW_SPI display(U8G2_R2, /* clo  ck=*/ 14 /* A4 */ , /* data=*/ 12 /* A2 */, /* CS=*/ 16 /* A3 */, /* reset=*/ U8X8_PIN_NONE); // 16, U8X8_PIN_NONE
+//#define BACKLIGHTPIN 15 // 2, 0
+//#define LIGHT_SENSOR   // turn off for ST7565, turn on for ST7920 with BHV1750/GY-30/GY-302 light sensor
+//#define LIGHT_SDA_PIN 0  // D3
+//#define LIGHT_SCL_PIN  13 // D7
+//BH1750 lightMeter(0x23);
+#endif
+
 time_t nowTime;
 const String degree = String((char)176);
 bool readyForWeatherUpdate = false;
@@ -201,6 +232,12 @@ void setup() {
            );
   delay(1000);
 
+  drawProgress("Backlight Level", "Test");
+
+  selfTestBacklight(BACKLIGHTPIN);
+
+  drawProgress("连接WIFI中,", "请稍等...");
+
   connectWIFI(
 #ifdef USE_WIFI_MANAGER
     true
@@ -217,6 +254,42 @@ void setup() {
 #endif
   drawProgress("连接WIFI成功,", "正在同步时间...");
   configTime(TZ_SEC, DST_SEC, "pool.ntp.org");
+  writeBootWebSite(SERIAL_NUMBER);
+  readValueWebSite(SERIAL_NUMBER, Location, Token, Resistor, dummyMode, backlightOffMode, sendAlarmEmail, alarmEmailAddress, displayContrast, displayMultiplier, displayBias, displayMinimumLevel, displayMaximumLevel, temperatureMultiplier, temperatureBias, humidityMultiplier, humidityBias);
+  setContrastSub();
+  Serial.print("Location: ");
+  Serial.println(Location);
+  Serial.print("Token: ");
+  Serial.println(Token);
+  Serial.print("Resistor: ");
+  Serial.println(Resistor);
+  Serial.print("dummyMode: ");
+  Serial.println(dummyMode);
+  Serial.print("backlightOffMode: ");
+  Serial.println(backlightOffMode);
+  Serial.print("sendAlarmEmail: ");
+  Serial.println(sendAlarmEmail);
+  Serial.print("alarmEmailAddress: ");
+  Serial.println(alarmEmailAddress);
+  Serial.print("displayContrast: ");
+  Serial.println(displayContrast);
+  Serial.print("displayMultiplier: ");
+  Serial.println(displayMultiplier);
+  Serial.print("displayBias: ");
+  Serial.println(displayBias);
+  Serial.print("displayMinimumLevel: ");
+  Serial.println(displayMinimumLevel);
+  Serial.print("displayMaximumLevel: ");
+  Serial.println(displayMaximumLevel);
+  Serial.print("temperatureMultiplier: ");
+  Serial.println(temperatureMultiplier);
+  Serial.print("temperatureBias: ");
+  Serial.println(temperatureBias);
+  Serial.print("humidityMultiplier: ");
+  Serial.println(humidityMultiplier);
+  Serial.print("humidityBias: ");
+  Serial.println(humidityBias);
+  Serial.println("");
   drawProgress("同步时间成功,", "正在更新天气数据...");
   updateData(true);
   timeSinceLastWUpdate = millis();
@@ -265,32 +338,38 @@ void detectButtonPush() {
 }
 
 void setContrastSub() {
-#if DISPLAY_CONTRAST > 0
-  display.setContrast(DISPLAY_CONTRAST);
-#endif
+  if (displayContrast > 0)
+  {
+    display.setContrast(displayContrast);
+    Serial.print("Set displayContrast to: ");
+    Serial.println(displayContrast);
+    Serial.println();
+  }
 }
 
 void adjustBacklightSub() {
-  adjustBacklight(lightLevel, BACKLIGHTPIN, DISPLAY_BIAS, DISPLAY_MULTIPLIER);
+  adjustBacklight(lightLevel, BACKLIGHTPIN, displayBias, displayMultiplier);
 }
 
 void loop() {
-#ifdef  BACKLIGHT_OFF_MODE
-  nowTime = time(nullptr);
-  struct tm* timeInfo;
-  timeInfo = localtime(&nowTime);
-  if (timeInfo->tm_hour >= 0 && timeInfo->tm_hour < 7)
+  if (backlightOffMode)
   {
-    turnOffBacklight(BACKLIGHTPIN, 1);
+    nowTime = time(nullptr);
+    struct tm* timeInfo;
+    timeInfo = localtime(&nowTime);
+    if (timeInfo->tm_hour >= 0 && timeInfo->tm_hour < 7)
+    {
+      turnOffBacklight(BACKLIGHTPIN, 1);
+    }
+    else
+    {
+      adjustBacklightSub();
+    }
   }
   else
   {
     adjustBacklightSub();
   }
-#else
-  adjustBacklightSub();
-#endif
-
   detectButtonPush();
 
   display.firstPage();
@@ -312,15 +391,13 @@ void loop() {
 #if (DHTPIN >= 0)
   if (dht.read())
   {
-    float fltHumidity = dht.readHumidity();
-    float fltCTemp = dht.readTemperature() - 1;
+    float fltHumidity = dht.readHumidity() * humidityMultiplier / 100 + humidityBias;
+    float fltCTemp = dht.readTemperature() * temperatureMultiplier / 100 + temperatureBias;
 #ifdef DEBUG
-    /*
-        Serial.print("Humidity: ");
-        Serial.println(fltHumidity);
-        Serial.print("CTemp: ");
-        Serial.println(fltCTemp);
-    */
+    Serial.print("Humidity: ");
+    Serial.println(fltHumidity);
+    Serial.print("CTemp: ");
+    Serial.println(fltCTemp);
 #endif
     if (isnan(fltCTemp) || isnan(fltHumidity))
     {
@@ -328,7 +405,14 @@ void loop() {
     else
     {
       previousTemp = fltCTemp;
-      previousHumidity = fltHumidity;
+      if (fltHumidity <= 100)
+      {
+        previousHumidity = fltHumidity;
+      }
+      else
+      {
+        previousHumidity = 100;
+      }
     }
   }
 #endif
@@ -428,6 +512,10 @@ void updateData(bool isInitialBoot) {
     drawProgress("正在更新...", "中文新闻...");
   }
   getChineseNewsData();
+  if (!isInitialBoot)
+  {
+    writeDataWebSite(SERIAL_NUMBER, previousTemp, previousHumidity, currentWeather.tmp, currentWeather.hum, 0);
+  }
   readyForWeatherUpdate = false;
 }
 
@@ -741,7 +829,7 @@ void getEnglishNewsDataDetails(char NewsServer[], char NewsURL[], int beginLine,
     int httpport = 443;
   */
   if (WiFi.status() != WL_CONNECTED) return;
-  
+
   WiFiClient client;
   int httpport = 80;
 
