@@ -16,12 +16,34 @@
 #include "GarfieldCommon.h"
 
 //#define DEBUG
-#define DISPLAY_TYPE 3   // 1-BIG 12864, 2-MINI 12864, 3-New Big BLUE 12864, to use 3, you must change u8x8_d_st7565.c as well!!!
+#define SERIAL_NUMBER 400
 //#define USE_WIFI_MANAGER     // disable to NOT use WiFi manager, enable to use
-//#define SHOW_US_CITIES  // disable to NOT to show Fremont and NY, enable to show - do NOT use, causes heap to overflow
-#define USE_HIGH_ALARM       // disable - LOW alarm sounds, enable - HIGH alarm sounds
 #define LANGUAGE_CN  // LANGUAGE_CN or LANGUAGE_EN
 #define BACKLIGHT_OFF_MODE // turn off backlight between 0:00AM and 7:00AM
+
+#if SERIAL_NUMBER == 400
+#define DISPLAY_TYPE 1   // 1-BIG 12864, 2-MINI 12864, 3-New Big BLUE 12864, to use 3, you must change u8x8_d_st7565.c as well!!!, 4- New BLUE 12864-ST7920
+#define USE_HIGH_ALARM       // disable - LOW alarm sounds, enable - HIGH alarm sounds
+//#define SHOW_US_CITIES  // disable to NOT to show Fremont and NY, enable to show
+#endif
+
+String Location = SERIAL_NUMBER + " Default";
+String Token = "Token";
+int Resistor = 80000;
+bool dummyMode = false;
+bool backlightOffMode = false;
+bool sendAlarmEmail = false;
+String alarmEmailAddress = "Email";
+int displayContrast = 128;
+int displayMultiplier = 100;
+int displayBias = 0;
+int displayMinimumLevel = 1;
+int displayMaximumLevel = 1023;
+int temperatureMultiplier = 100;
+int temperatureBias = 0;
+int humidityMultiplier = 100;
+int humidityBias = 0;
+
 
 #define DHTTYPE  DHT11       // Sensor type DHT11/21/22/AM2301/AM2302
 #define BUTTONPIN   4
@@ -107,14 +129,32 @@ HeWeatherCurrent currentWeatherClient2;
 
 #if DISPLAY_TYPE == 1
 U8G2_ST7565_LM6059_F_4W_SW_SPI display(U8G2_R2, /* clock=*/ 14, /* data=*/ 12, /* cs=*/ 13, /* dc=*/ 15, /* reset=*/ 16); // U8G2_ST7565_LM6059_F_4W_SW_SPI
+#define DISPLAY_CONTRAST 135
+#define DISPLAY_BIAS -25
+#define DISPLAY_MULTIPLIER 200
 #endif
 
 #if DISPLAY_TYPE == 2
 U8G2_ST7565_64128N_F_4W_SW_SPI display(U8G2_R0, /* clock=*/ 14, /* data=*/ 12, /* cs=*/ 13, /* dc=*/ 15, /* reset=*/ 16); // U8G2_ST7565_64128N_F_4W_SW_SPI
+#define DISPLAY_CONTRAST 103
+#define DISPLAY_BIAS 15
+#define DISPLAY_MULTIPLIER 200
 #endif
 
 #if DISPLAY_TYPE == 3
 U8G2_ST7565_64128N_F_4W_SW_SPI display(U8G2_R2, /* clock=*/ 14, /* data=*/ 12, /* cs=*/ 13, /* dc=*/ 15, /* reset=*/ 16); // U8G2_ST7565_64128N_F_4W_SW_SPI
+#define DISPLAY_CONTRAST 168
+#define DISPLAY_BIAS 30
+#define DISPLAY_MULTIPLIER 300
+#endif
+
+#if DISPLAY_TYPE == 4
+U8G2_ST7920_128X64_F_SW_SPI display(U8G2_R2, /* clo  ck=*/ 14 /* A4 */ , /* data=*/ 12 /* A2 */, /* CS=*/ 16 /* A3 */, /* reset=*/ U8X8_PIN_NONE); // 16, U8X8_PIN_NONE
+//#define BACKLIGHTPIN 15 // 2, 0
+//#define LIGHT_SENSOR   // turn off for ST7565, turn on for ST7920 with BHV1750/GY-30/GY-302 light sensor
+//#define LIGHT_SDA_PIN 0  // D3
+//#define LIGHT_SCL_PIN  13 // D7
+//BH1750 lightMeter(0x23);
 #endif
 
 time_t nowTime;
@@ -135,42 +175,21 @@ int lastButtonState = LOW;   // the previous reading from the input pin
 unsigned long lastDebounceTime = 0;  // the last time the output pin was toggled
 const unsigned long debounceDelay = 30;    // the debounce time; increase if the output flickers
 
-#if DISPLAY_TYPE == 1
-#define LONGBUTTONPUSH 30
-#endif
-
-#if DISPLAY_TYPE == 2
-#define LONGBUTTONPUSH 80
-#endif
-
-#if DISPLAY_TYPE == 3
-#define LONGBUTTONPUSH 40
-#endif
-
 int buttonPushCounter = 0;
-int majorMode = 0; // 0-Clock/News Mode, 1-Math Mode, 2-80 Poems, 3-300Poems-not possible out of memory
-
-int questionCount = 0;
-const int questionTotal = 100;
-int currentMode = 0; // 0 - show question, 1 - show answer
-String currentQuestion = "";
-String currentAnswer = "";
-
 int lineCount = 0;
-int lineTotal = 1;
-int poemCount = 1;
-const int poemTotal = 10;
-#define TOTAL_POEMS  96 // Total number of poems
-#define MAXIMUM_POEM_SIZE 11 //11 for 80 poems, 121 for 300 poems
-
-String poemText[MAXIMUM_POEM_SIZE];
-int currentPoem = 1;
-bool readPoem = false;
 
 #define NEWS_POLITICS_SIZE 10
 #define NEWS_WORLD_SIZE 20
 #define NEWS_ENGLISH_SIZE 10
 String newsText[NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE + NEWS_ENGLISH_SIZE];
+
+#if defined SHOW_US_CITIES && (NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE + NEWS_ENGLISH_SIZE) > 30
+#error *** When SHOW_US_CITIES is used, news items should not be more than 30 ***
+#endif
+
+#if not defined SHOW_US_CITIES && (NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE + NEWS_ENGLISH_SIZE > 40)
+#error *** When SHOW_US_CITIES is not used, news items should not be more than 40 ***
+#endif
 
 
 void setup() {
@@ -180,6 +199,7 @@ void setup() {
   Serial.println("Begin");
 #endif
   initializeBackLightArray(lightLevel, BACKLIGHTPIN);
+  adjustBacklightSub();
 
 #if (DHTPIN >= 0)
   dht.begin();
@@ -198,12 +218,8 @@ void setup() {
 
   display.begin();
   display.setFontPosTop();
-#if DISPLAY_TYPE == 1
-  display.setContrast(135);
-#endif
-#if DISPLAY_TYPE == 3
-  display.setContrast(168);
-#endif
+  setContrastSub();
+
   display.clearBuffer();
   display.drawXBM(31, 0, 66, 64, garfield);
   display.sendBuffer();
@@ -215,6 +231,12 @@ void setup() {
 #endif
            );
   delay(1000);
+
+  drawProgress("Backlight Level", "Test");
+
+  selfTestBacklight(BACKLIGHTPIN);
+
+  drawProgress("连接WIFI中,", "请稍等...");
 
   connectWIFI(
 #ifdef USE_WIFI_MANAGER
@@ -232,6 +254,42 @@ void setup() {
 #endif
   drawProgress("连接WIFI成功,", "正在同步时间...");
   configTime(TZ_SEC, DST_SEC, "pool.ntp.org");
+  writeBootWebSite(SERIAL_NUMBER);
+  readValueWebSite(SERIAL_NUMBER, Location, Token, Resistor, dummyMode, backlightOffMode, sendAlarmEmail, alarmEmailAddress, displayContrast, displayMultiplier, displayBias, displayMinimumLevel, displayMaximumLevel, temperatureMultiplier, temperatureBias, humidityMultiplier, humidityBias);
+  setContrastSub();
+  Serial.print("Location: ");
+  Serial.println(Location);
+  Serial.print("Token: ");
+  Serial.println(Token);
+  Serial.print("Resistor: ");
+  Serial.println(Resistor);
+  Serial.print("dummyMode: ");
+  Serial.println(dummyMode);
+  Serial.print("backlightOffMode: ");
+  Serial.println(backlightOffMode);
+  Serial.print("sendAlarmEmail: ");
+  Serial.println(sendAlarmEmail);
+  Serial.print("alarmEmailAddress: ");
+  Serial.println(alarmEmailAddress);
+  Serial.print("displayContrast: ");
+  Serial.println(displayContrast);
+  Serial.print("displayMultiplier: ");
+  Serial.println(displayMultiplier);
+  Serial.print("displayBias: ");
+  Serial.println(displayBias);
+  Serial.print("displayMinimumLevel: ");
+  Serial.println(displayMinimumLevel);
+  Serial.print("displayMaximumLevel: ");
+  Serial.println(displayMaximumLevel);
+  Serial.print("temperatureMultiplier: ");
+  Serial.println(temperatureMultiplier);
+  Serial.print("temperatureBias: ");
+  Serial.println(temperatureBias);
+  Serial.print("humidityMultiplier: ");
+  Serial.println(humidityMultiplier);
+  Serial.print("humidityBias: ");
+  Serial.println(humidityBias);
+  Serial.println("");
   drawProgress("同步时间成功,", "正在更新天气数据...");
   updateData(true);
   timeSinceLastWUpdate = millis();
@@ -267,43 +325,8 @@ void detectButtonPush() {
                   false
 #endif
                  );
-        if (majorMode == 0)
-        {
-          draw_state++;
-          timeSinceLastPageUpdate = millis();
-        }
-        else if (majorMode == 1)
-        {
-          if (currentMode == 0)
-          {
-            currentMode = 1;
-          }
-          else
-          {
-            currentMode = 0;
-            currentQuestion = generateMathQuestion(currentAnswer);
-            questionCount++;
-            if (questionCount >= questionTotal + 1)
-            {
-              questionCount = 1;
-            }
-          }
-        }
-        else if (majorMode == 2)
-        {
-          lineCount++;
-          if (lineCount >= lineTotal)
-          {
-            lineCount = 0;
-            currentPoem = random(1, TOTAL_POEMS + 1);
-            readPoem = true;
-            poemCount++;
-            if (poemCount >= poemTotal + 1)
-            {
-              poemCount = 0;
-            }
-          }
-        }
+        draw_state++;
+        timeSinceLastPageUpdate = millis();
       }
       else
       {
@@ -314,80 +337,44 @@ void detectButtonPush() {
   lastButtonState = reading;
 }
 
-void loop() {
-  if (buttonPushCounter >= LONGBUTTONPUSH)
+void setContrastSub() {
+  if (displayContrast > 0)
   {
-    buttonPushCounter = 0;
-    draw_state = 0;
-    if (majorMode == 0)
+    display.setContrast(displayContrast);
+    Serial.print("Set displayContrast to: ");
+    Serial.println(displayContrast);
+    Serial.println();
+  }
+}
+
+void adjustBacklightSub() {
+  adjustBacklight(lightLevel, BACKLIGHTPIN, displayBias, displayMultiplier);
+}
+
+void loop() {
+  if (backlightOffMode)
+  {
+    nowTime = time(nullptr);
+    struct tm* timeInfo;
+    timeInfo = localtime(&nowTime);
+    if (timeInfo->tm_hour >= 0 && timeInfo->tm_hour < 7)
     {
-      majorMode = 1; // we are in Math mode, need to initialize all variables
-      questionCount = 0;
-      currentMode = 0; // 0 - show question, 1 - show answer
-      currentQuestion = generateMathQuestion(currentAnswer);
-    }
-    else if (majorMode == 1)
-    {
-      majorMode = 2; // we are in 80 Poem mode
-      currentPoem = random(1, TOTAL_POEMS + 1);
-      lineCount = 0;
-      poemCount = 1;
-      readPoem = true;
+      turnOffBacklight(BACKLIGHTPIN, 1);
     }
     else
     {
-      majorMode = 0; // we are in Clock mode
+      adjustBacklightSub();
     }
-    longBeep(ALARMPIN,
-#ifdef USE_HIGH_ALARM
-             true
-#else
-             false
-#endif
-            );
-  }
-
-  if (majorMode == 2 && readPoem)
-  {
-    String strFileName = convertPoemNumberToFileName(currentPoem, TOTAL_POEMS);
-    readPoemFromSPIFFS(strFileName, poemText, lineTotal);
-    readPoem = false;
-  }
-
-#ifdef  BACKLIGHT_OFF_MODE
-  nowTime = time(nullptr);
-  struct tm* timeInfo;
-  timeInfo = localtime(&nowTime);
-  if (timeInfo->tm_hour >= 0 && timeInfo->tm_hour < 7)
-  {
-    tunOffBacklight(BACKLIGHTPIN);
   }
   else
   {
-#if DISPLAY_TYPE == 3
-    adjustBacklight(lightLevel, BACKLIGHTPIN, 45, 500);
-#else
-    adjustBacklight(lightLevel, BACKLIGHTPIN);
-#endif
+    adjustBacklightSub();
   }
-#else
-#if DISPLAY_TYPE == 3
-    adjustBacklight(lightLevel, BACKLIGHTPIN, 45, 500);
-#else
-    adjustBacklight(lightLevel, BACKLIGHTPIN);
-#endif
-#endif
-
   detectButtonPush();
 
   display.firstPage();
   do {
     draw();
-
-    if (majorMode == 2)
-    {
-      draw_state++;
-    }
   } while ( display.nextPage() );
 
   if (millis() - timeSinceLastWUpdate > (1000 * UPDATE_INTERVAL_SECS)) {
@@ -395,41 +382,22 @@ void loop() {
     timeSinceLastWUpdate = millis();
   }
 
-  if (majorMode == 0)
+  if (millis() - timeSinceLastPageUpdate > PAGE_UPDATE_INTERVAL)
   {
-    if (millis() - timeSinceLastPageUpdate > PAGE_UPDATE_INTERVAL)
-    {
-      timeSinceLastPageUpdate = millis();
-      draw_state++;
-    }
-  }
-  else if (majorMode == 1)
-  {
-    if (draw_state >= 10)
-    {
-      draw_state = 0;
-    }
-  }
-  else if (majorMode == 2)
-  {
-    if (draw_state >= 121)
-    {
-      draw_state = 0;
-    }
+    timeSinceLastPageUpdate = millis();
+    draw_state++;
   }
 
 #if (DHTPIN >= 0)
   if (dht.read())
   {
-    float fltHumidity = dht.readHumidity();
-    float fltCTemp = dht.readTemperature() - 1;
+    float fltHumidity = dht.readHumidity() * humidityMultiplier / 100 + humidityBias;
+    float fltCTemp = dht.readTemperature() * temperatureMultiplier / 100 + temperatureBias;
 #ifdef DEBUG
-    /*
-        Serial.print("Humidity: ");
-        Serial.println(fltHumidity);
-        Serial.print("CTemp: ");
-        Serial.println(fltCTemp);
-    */
+    Serial.print("Humidity: ");
+    Serial.println(fltHumidity);
+    Serial.print("CTemp: ");
+    Serial.println(fltCTemp);
 #endif
     if (isnan(fltCTemp) || isnan(fltHumidity))
     {
@@ -437,7 +405,14 @@ void loop() {
     else
     {
       previousTemp = fltCTemp;
-      previousHumidity = fltHumidity;
+      if (fltHumidity <= 100)
+      {
+        previousHumidity = fltHumidity;
+      }
+      else
+      {
+        previousHumidity = 100;
+      }
     }
   }
 #endif
@@ -449,20 +424,8 @@ void loop() {
 
 void draw(void) {
   detectButtonPush();
-  if (majorMode == 0) // Clock mode
-  {
-    drawClock();
-    detectButtonPush();
-  }
-  else if (majorMode == 1) // Math mode
-  {
-    drawMath();
-  }
-  else if (majorMode == 2) // Poem modes
-  {
-    drawPoem();
-    detectButtonPush();
-  }
+  drawClock();
+  detectButtonPush();
 }
 
 void drawClock(void) {
@@ -549,6 +512,10 @@ void updateData(bool isInitialBoot) {
     drawProgress("正在更新...", "中文新闻...");
   }
   getChineseNewsData();
+  if (!isInitialBoot)
+  {
+    writeDataWebSite(SERIAL_NUMBER, previousTemp, previousHumidity, currentWeather.tmp, currentWeather.hum, 0);
+  }
   readyForWeatherUpdate = false;
 }
 
@@ -660,12 +627,10 @@ void drawEnglishNews(int currentNewsLine) {
     display.print(strTempLine);
     detectButtonPush();
   }
-
   String stringText = String(currentNewsLine) + "/" + String(NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE + NEWS_ENGLISH_SIZE);
   int stringWidth = display.getStrWidth(string2char(stringText));
   display.setCursor(128 - stringWidth, 53);
   display.print(stringText);
-
 }
 
 void drawLocal() {
@@ -710,20 +675,11 @@ void drawLocal() {
   {
     display.drawStr(0, 39, string2char(String(previousTemp, 0) + degree + "C"));
   }
-  else
-  {
-    //    display.drawStr(0, 39, string2char("..."));
-  }
 
   if (previousTemp != 0 && previousHumidity != 0)
   {
     int stringWidth = display.getStrWidth(string2char(String(previousHumidity, 0) + "%"));
     display.drawStr(128 - stringWidth, 39, string2char(String(previousHumidity, 0) + "%"));
-  }
-  else
-  {
-    //    int stringWidth = display.getStrWidth(string2char("..."));
-    //    display.drawStr(128 - stringWidth, 39, string2char("..."));
   }
   display.drawHLine(0, 51, 128);
 }
@@ -768,109 +724,13 @@ void drawWorldLocation(String stringText, Timezone tztTimeZone, HeWeatherCurrent
 }
 #endif
 
-void drawMath(void) {
-  nowTime = time(nullptr);
-  struct tm* timeInfo;
-  timeInfo = localtime(&nowTime);
-  char buff[20];
-  sprintf_P(buff, PSTR("%02d:%02d"), timeInfo->tm_hour, timeInfo->tm_min);
-
-  display.setFont(u8g2_font_helvB10_tf); // u8g2_font_helvB08_tf, u8g2_font_6x13_tn
-  display.setCursor(1, 1);
-  display.print(questionCount);
-  display.print("/");
-  display.print(questionTotal);
-
-  display.setCursor(90, 1);
-  display.print(buff);
-
-  display.setFont(u8g2_font_helvB12_tf); // u8g2_font_helvB08_tf, u8g2_font_10x20_tf
-  int stringWidth = display.getStrWidth(string2char(currentAnswer));
-  display.setCursor((128 - stringWidth) / 2, 28);
-  if (currentMode == 0)
-  {
-    display.print(currentQuestion);
-  }
-  else
-  {
-    display.print(currentAnswer);
-  }
-}
-
-void drawPoem(void) {
-  //    display.drawXBM(31, 0, 66, 64, garfield);
-  nowTime = time(nullptr);
-  struct tm* timeInfo;
-  timeInfo = localtime(&nowTime);
-  char buff[20];
-  sprintf_P(buff, PSTR("%02d:%02d"), timeInfo->tm_hour, timeInfo->tm_min);
-
-  int stringWidth = 0;
-
-  display.enableUTF8Print();
-  display.setFont(u8g2_font_wqy12_t_gb2312); // u8g2_font_wqy12_t_gb2312, u8g2_font_helvB08_tf
-
-  int tempLineBegin = 0;
-  int tempLineMultiply = 1;
-  int tempLineEnd = 5;
-
-  tempLineMultiply = lineCount / 5;
-  tempLineBegin = tempLineMultiply * 5;
-  tempLineEnd = tempLineBegin + 5;
-
-  if (tempLineEnd > lineCount + 1)
-  {
-    tempLineEnd = lineCount + 1;
-  }
-
-  int intMaxY = 0;
-  for (int i = tempLineBegin; i < tempLineEnd; ++i)
-  {
-    String strTemp = poemText[i];
-    if (strTemp.length() > 30)
-    {
-      // each Chinese character's length is 3 in UTF-8
-      strTemp = strTemp.substring(0, 30);
-      strTemp.trim();
-    }
-    stringWidth = display.getUTF8Width(string2char(strTemp));
-    intMaxY = (i % 5) * 13 + 1;
-    display.setCursor((128 - stringWidth) / 2, intMaxY);
-    display.print(strTemp);
-    detectButtonPush();
-  }
-  display.disableUTF8Print();
-
-  display.setFont(u8g2_font_helvB08_tf); // u8g2_font_helvB08_tf, u8g2_font_6x13_tn
-  if (intMaxY < 52)
-  {
-    display.setCursor(28, 53);
-    display.print(TOTAL_POEMS);
-    display.setCursor(70, 53);
-    display.print(buff);
-  }
-
-  display.setCursor(0, 41);
-  display.print(lineCount);
-
-  stringWidth = display.getStrWidth(string2char(String(lineTotal - 1)));
-  display.setCursor(128 - stringWidth, 41);
-  display.print(lineTotal - 1);
-
-  display.setCursor(0, 53);
-  display.print(poemCount);
-
-  stringWidth = display.getStrWidth(string2char(String(poemTotal)));
-  display.setCursor(128 - stringWidth, 53);
-  display.print(poemTotal);
-}
-
 void getChineseNewsDataDetails(char NewsServer[], char NewsURL[], int beginLine, int lineSizeLimit) {
   int tempBeginLine = beginLine;
   /*
     WiFiClientSecure client;
     int httpport = 443;
   */
+  if (WiFi.status() != WL_CONNECTED) return;
 
   WiFiClient client;
   int httpport = 80;
@@ -968,6 +828,8 @@ void getEnglishNewsDataDetails(char NewsServer[], char NewsURL[], int beginLine,
     WiFiClientSecure client;
     int httpport = 443;
   */
+  if (WiFi.status() != WL_CONNECTED) return;
+
   WiFiClient client;
   int httpport = 80;
 
