@@ -16,7 +16,7 @@
 #include "GarfieldCommon.h"
 
 //#define DEBUG
-#define SERIAL_NUMBER 406
+#define SERIAL_NUMBER 407
 //#define USE_WIFI_MANAGER     // disable to NOT use WiFi manager, enable to use
 #define LANGUAGE_CN  // LANGUAGE_CN or LANGUAGE_EN
 #define BACKLIGHT_OFF_MODE // turn off backlight between 0:00AM and 7:00AM
@@ -59,6 +59,12 @@
 
 #if SERIAL_NUMBER == 406
 #define DISPLAY_TYPE 1   // 1-BIG 12864, 2-MINI 12864, 3-New Big BLUE 12864, to use 3, you must change u8x8_d_st7565.c as well!!!, 4- New BLUE 12864-ST7920
+#define USE_HIGH_ALARM       // disable - LOW alarm sounds, enable - HIGH alarm sounds
+//#define SHOW_US_CITIES  // disable to NOT to show Fremont and NY, enable to show
+#endif
+
+#if SERIAL_NUMBER == 407
+#define DISPLAY_TYPE 2   // 1-BIG 12864, 2-MINI 12864, 3-New Big BLUE 12864, to use 3, you must change u8x8_d_st7565.c as well!!!, 4- New BLUE 12864-ST7920
 #define USE_HIGH_ALARM       // disable - LOW alarm sounds, enable - HIGH alarm sounds
 //#define SHOW_US_CITIES  // disable to NOT to show Fremont and NY, enable to show
 #endif
