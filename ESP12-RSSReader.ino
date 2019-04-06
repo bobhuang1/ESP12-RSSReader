@@ -269,11 +269,18 @@ void setup() {
            );
   delay(1000);
 
+  drawProgress(String(CompileDate), String(SERIAL_NUMBER));
+  delay(1000);
+
   drawProgress("Backlight Level", "Test");
 
   selfTestBacklight(BACKLIGHTPIN);
 
+#ifdef USE_WIFI_MANAGER
+  drawProgress("连接WIFI:", "IBECloc12864-HW");
+#else
   drawProgress("连接WIFI中,", "请稍等...");
+#endif
 
   connectWIFI(
 #ifdef USE_WIFI_MANAGER
