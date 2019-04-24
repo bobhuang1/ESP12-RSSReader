@@ -11,66 +11,25 @@
 #include <U8g2lib.h>
 #include <SPI.h>
 #include <WiFiManager.h>
+#include <ESP8266httpUpdate.h>
 #include "FS.h"
 #include "HeWeatherCurrent.h"
 #include "GarfieldCommon.h"
 
+#define CURRENT_VERSION 1
 //#define DEBUG
-#define SERIAL_NUMBER 407
 //#define USE_WIFI_MANAGER     // disable to NOT use WiFi manager, enable to use
 #define LANGUAGE_CN  // LANGUAGE_CN or LANGUAGE_EN
-#define BACKLIGHT_OFF_MODE // turn off backlight between 0:00AM and 7:00AM
+#define USE_HIGH_ALARM       // disable - LOW alarm sounds, enable - HIGH alarm sounds. Enable for all serials.
+//#define SHOW_US_CITIES  // disable to NOT to show Fremont and NY, enable to show. Disable for all serials.
 
-#if SERIAL_NUMBER == 400
+// Use 1 for serial 400-406, 2 for serial 407!!!
 #define DISPLAY_TYPE 1   // 1-BIG 12864, 2-MINI 12864, 3-New Big BLUE 12864, to use 3, you must change u8x8_d_st7565.c as well!!!, 4- New BLUE 12864-ST7920
-#define USE_HIGH_ALARM       // disable - LOW alarm sounds, enable - HIGH alarm sounds
-//#define SHOW_US_CITIES  // disable to NOT to show Fremont and NY, enable to show
-#endif
-
-#if SERIAL_NUMBER == 401
-#define DISPLAY_TYPE 1   // 1-BIG 12864, 2-MINI 12864, 3-New Big BLUE 12864, to use 3, you must change u8x8_d_st7565.c as well!!!, 4- New BLUE 12864-ST7920
-#define USE_HIGH_ALARM       // disable - LOW alarm sounds, enable - HIGH alarm sounds
-//#define SHOW_US_CITIES  // disable to NOT to show Fremont and NY, enable to show
-#endif
-
-#if SERIAL_NUMBER == 402
-#define DISPLAY_TYPE 1   // 1-BIG 12864, 2-MINI 12864, 3-New Big BLUE 12864, to use 3, you must change u8x8_d_st7565.c as well!!!, 4- New BLUE 12864-ST7920
-#define USE_HIGH_ALARM       // disable - LOW alarm sounds, enable - HIGH alarm sounds
-//#define SHOW_US_CITIES  // disable to NOT to show Fremont and NY, enable to show
-#endif
-
-#if SERIAL_NUMBER == 403
-#define DISPLAY_TYPE 1   // 1-BIG 12864, 2-MINI 12864, 3-New Big BLUE 12864, to use 3, you must change u8x8_d_st7565.c as well!!!, 4- New BLUE 12864-ST7920
-#define USE_HIGH_ALARM       // disable - LOW alarm sounds, enable - HIGH alarm sounds
-//#define SHOW_US_CITIES  // disable to NOT to show Fremont and NY, enable to show
-#endif
-
-#if SERIAL_NUMBER == 404
-#define DISPLAY_TYPE 1   // 1-BIG 12864, 2-MINI 12864, 3-New Big BLUE 12864, to use 3, you must change u8x8_d_st7565.c as well!!!, 4- New BLUE 12864-ST7920
-#define USE_HIGH_ALARM       // disable - LOW alarm sounds, enable - HIGH alarm sounds
-//#define SHOW_US_CITIES  // disable to NOT to show Fremont and NY, enable to show
-#endif
-
-#if SERIAL_NUMBER == 405
-#define DISPLAY_TYPE 1   // 1-BIG 12864, 2-MINI 12864, 3-New Big BLUE 12864, to use 3, you must change u8x8_d_st7565.c as well!!!, 4- New BLUE 12864-ST7920
-#define USE_HIGH_ALARM       // disable - LOW alarm sounds, enable - HIGH alarm sounds
-//#define SHOW_US_CITIES  // disable to NOT to show Fremont and NY, enable to show
-#endif
-
-#if SERIAL_NUMBER == 406
-#define DISPLAY_TYPE 1   // 1-BIG 12864, 2-MINI 12864, 3-New Big BLUE 12864, to use 3, you must change u8x8_d_st7565.c as well!!!, 4- New BLUE 12864-ST7920
-#define USE_HIGH_ALARM       // disable - LOW alarm sounds, enable - HIGH alarm sounds
-//#define SHOW_US_CITIES  // disable to NOT to show Fremont and NY, enable to show
-#endif
-
-#if SERIAL_NUMBER == 407
-#define DISPLAY_TYPE 2   // 1-BIG 12864, 2-MINI 12864, 3-New Big BLUE 12864, to use 3, you must change u8x8_d_st7565.c as well!!!, 4- New BLUE 12864-ST7920
-#define USE_HIGH_ALARM       // disable - LOW alarm sounds, enable - HIGH alarm sounds
-//#define SHOW_US_CITIES  // disable to NOT to show Fremont and NY, enable to show
-#endif
 
 
-String Location = SERIAL_NUMBER + " Default";
+// Serial 400 to 407
+int serialNumber = -1;
+String Location = "Default";
 String Token = "Token";
 int Resistor = 80000;
 bool dummyMode = false;
@@ -86,6 +45,13 @@ int temperatureMultiplier = 100;
 int temperatureBias = 0;
 int humidityMultiplier = 100;
 int humidityBias = 0;
+int firmwareversion = 0;
+String firmwareBin = "";
+
+
+// BIN files:
+// 400.bin for serial 400 to 406
+// 407.bin for serial 407
 
 
 #define DHTTYPE  DHT11       // Sensor type DHT11/21/22/AM2301/AM2302
@@ -275,7 +241,7 @@ void setup() {
            );
   delay(1000);
 
-  drawProgress(String(CompileDate), String(SERIAL_NUMBER));
+  drawProgress(String(CompileDate), String(serialNumber));
   delay(1000);
 
   drawProgress("Backlight Level", "Test");
@@ -304,9 +270,24 @@ void setup() {
 #endif
   drawProgress("连接WIFI成功,", "正在同步时间...");
   configTime(TZ_SEC, DST_SEC, "pool.ntp.org");
-  writeBootWebSite(SERIAL_NUMBER);
-  readValueWebSite(SERIAL_NUMBER, Location, Token, Resistor, dummyMode, backlightOffMode, sendAlarmEmail, alarmEmailAddress, displayContrast, displayMultiplier, displayBias, displayMinimumLevel, displayMaximumLevel, temperatureMultiplier, temperatureBias, humidityMultiplier, humidityBias);
+  readValueWebSite(serialNumber, Location, Token, Resistor, dummyMode, backlightOffMode, sendAlarmEmail, alarmEmailAddress, displayContrast, displayMultiplier, displayBias, displayMinimumLevel, displayMaximumLevel, temperatureMultiplier, temperatureBias, humidityMultiplier, humidityBias, firmwareversion, firmwareBin);
+  if (serialNumber < 0)
+  {
+    drawProgress("新MAC " + String(WiFi.macAddress()), "序列号: " + String(serialNumber));
+    stopApp();
+  }
+  else if (serialNumber == 0)
+  {
+    drawProgress("多MAC " + String(WiFi.macAddress()), "找管理员处理");
+    stopApp();
+  }
   setContrastSub();
+  drawProgress("Serial: " + String(serialNumber), "MAC: " + String(WiFi.macAddress()));
+  delay(1500);
+  Serial.print("MAC: ");
+  Serial.println(String(WiFi.macAddress()));
+  Serial.print("Serial: ");
+  Serial.println(serialNumber);
   Serial.print("Location: ");
   Serial.println(Location);
   Serial.print("Token: ");
@@ -339,7 +320,51 @@ void setup() {
   Serial.println(humidityMultiplier);
   Serial.print("humidityBias: ");
   Serial.println(humidityBias);
+  Serial.print("firmwareversion: ");
+  Serial.println(firmwareversion);
+  Serial.print("CURRENT_VERSION: ");
+  Serial.println(CURRENT_VERSION);
+  Serial.print("firmwareBin: ");
+  Serial.println(SETTINGS_BASE_URL + SETTINGS_OTA_BIN_URL + firmwareBin);
   Serial.println("");
+  writeBootWebSite(serialNumber);
+  if (firmwareversion > CURRENT_VERSION)
+  {
+    drawProgress("自动升级中!", "请稍候......");
+    Serial.println("Auto upgrade starting...");
+    ESPhttpUpdate.rebootOnUpdate(false);
+    t_httpUpdate_return ret = ESPhttpUpdate.update(SETTINGS_SERVER, 81, SETTINGS_BASE_URL + SETTINGS_OTA_BIN_URL + firmwareBin);
+    Serial.println("Auto upgrade finished.");
+    Serial.print("ret "); Serial.println(ret);
+    switch (ret) {
+      case HTTP_UPDATE_FAILED:
+        Serial.printf("HTTP_UPDATE_FAILED Error (%d): %s\n", ESPhttpUpdate.getLastError(), ESPhttpUpdate.getLastErrorString().c_str());
+        drawProgress("升级错误!", "重启!");
+        delay(2000);
+        ESP.restart();
+        break;
+      case HTTP_UPDATE_NO_UPDATES:
+        Serial.println("HTTP_UPDATE_NO_UPDATES");
+        drawProgress("无需升级!", "继续启动...");
+        delay(1500);
+        break;
+      case HTTP_UPDATE_OK:
+        Serial.println("HTTP_UPDATE_OK");
+        drawProgress("升级成功!", "重启...");
+        delay(2000);
+        ESP.restart();
+        break;
+      default:
+        Serial.print("Undefined HTTP_UPDATE Code: "); Serial.println(ret);
+        drawProgress("升级错误!", "重启!");
+        delay(2000);
+        ESP.restart();
+    }
+  }
+  else
+  {
+    drawProgress("无需自动升级!", "继续启动...");
+  }
   drawProgress("同步时间成功,", "正在更新天气数据...");
   updateData(true);
   timeSinceLastWUpdate = millis();
@@ -564,7 +589,7 @@ void updateData(bool isInitialBoot) {
   getChineseNewsData();
   if (!isInitialBoot)
   {
-    writeDataWebSite(SERIAL_NUMBER, previousTemp, previousHumidity, currentWeather.tmp, currentWeather.hum, 0);
+    writeDataWebSite(serialNumber, previousTemp, previousHumidity, currentWeather.tmp, currentWeather.hum, 0);
   }
   readyForWeatherUpdate = false;
 }
