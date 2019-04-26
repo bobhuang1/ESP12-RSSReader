@@ -269,7 +269,7 @@ void setup() {
   Serial.println("WIFI Connected");
 #endif
   drawProgress("连接WIFI成功,", "正在同步时间...");
-  configTime(TZ_SEC, DST_SEC, "pool.ntp.org");
+  configTime(TZ_SEC, DST_SEC, NTP_SERVER);
   readValueWebSite(serialNumber, Location, Token, Resistor, dummyMode, backlightOffMode, sendAlarmEmail, alarmEmailAddress, displayContrast, displayMultiplier, displayBias, displayMinimumLevel, displayMaximumLevel, temperatureMultiplier, temperatureBias, humidityMultiplier, humidityBias, firmwareversion, firmwareBin);
   if (serialNumber < 0)
   {
