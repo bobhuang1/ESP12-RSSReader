@@ -241,7 +241,7 @@ void setup() {
            );
   delay(1000);
 
-  drawProgress(String(CompileDate), String(serialNumber));
+  drawProgress(String(CompileDate), String(CURRENT_VERSION));
   delay(1000);
 
   drawProgress("Backlight Level", "Test");
