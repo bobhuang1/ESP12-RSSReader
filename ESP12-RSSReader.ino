@@ -16,14 +16,14 @@
 #include "HeWeatherCurrent.h"
 #include "GarfieldCommon.h"
 
-#define CURRENT_VERSION 1
+#define CURRENT_VERSION 3
 //#define DEBUG
 //#define USE_WIFI_MANAGER     // disable to NOT use WiFi manager, enable to use
 #define LANGUAGE_CN  // LANGUAGE_CN or LANGUAGE_EN
 #define USE_HIGH_ALARM       // disable - LOW alarm sounds, enable - HIGH alarm sounds. Enable for all serials.
 //#define SHOW_US_CITIES  // disable to NOT to show Fremont and NY, enable to show. Disable for all serials.
 
-// Use 1 for serial 400-406, 2 for serial 407!!!
+// Use 1 for serial 400-406 (400.bin), 2 for serial 407 (407.bin)!!!
 #define DISPLAY_TYPE 1   // 1-BIG 12864, 2-MINI 12864, 3-New Big BLUE 12864, to use 3, you must change u8x8_d_st7565.c as well!!!, 4- New BLUE 12864-ST7920
 
 
