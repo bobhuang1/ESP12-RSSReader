@@ -16,7 +16,7 @@
 #include "HeWeatherCurrent.h"
 #include "GarfieldCommon.h"
 
-#define CURRENT_VERSION 3
+#define CURRENT_VERSION 4
 //#define DEBUG
 //#define USE_WIFI_MANAGER     // disable to NOT use WiFi manager, enable to use
 #define LANGUAGE_CN  // LANGUAGE_CN or LANGUAGE_EN
@@ -48,6 +48,7 @@ int humidityBias = 0;
 int firmwareversion = 0;
 String firmwareBin = "";
 
+SettingsServerStruct settingsServer;
 
 // BIN files:
 // 400.bin for serial 400 to 406
@@ -270,7 +271,7 @@ void setup() {
 #endif
   drawProgress("连接WIFI成功,", "正在同步时间...");
   configTime(TZ_SEC, DST_SEC, NTP_SERVER);
-  readValueWebSite(serialNumber, Location, Token, Resistor, dummyMode, backlightOffMode, sendAlarmEmail, alarmEmailAddress, displayContrast, displayMultiplier, displayBias, displayMinimumLevel, displayMaximumLevel, temperatureMultiplier, temperatureBias, humidityMultiplier, humidityBias, firmwareversion, firmwareBin);
+  readValueWebSite(&settingsServer, serialNumber, Location, Token, Resistor, dummyMode, backlightOffMode, sendAlarmEmail, alarmEmailAddress, displayContrast, displayMultiplier, displayBias, displayMinimumLevel, displayMaximumLevel, temperatureMultiplier, temperatureBias, humidityMultiplier, humidityBias, firmwareversion, firmwareBin);
   if (serialNumber < 0)
   {
     drawProgress("新MAC " + String(WiFi.macAddress()), "序列号: " + String(serialNumber));
@@ -325,15 +326,15 @@ void setup() {
   Serial.print("CURRENT_VERSION: ");
   Serial.println(CURRENT_VERSION);
   Serial.print("firmwareBin: ");
-  Serial.println(SETTINGS_BASE_URL + SETTINGS_OTA_BIN_URL + firmwareBin);
+  Serial.println(settingsServer.settingsBaseUrl + settingsServer.settingsOtaBinUrl + firmwareBin);
   Serial.println("");
-  writeBootWebSite(serialNumber);
+  writeBootWebSite(&settingsServer, serialNumber);
   if (firmwareversion > CURRENT_VERSION)
   {
     drawProgress("自动升级中!", "请稍候......");
     Serial.println("Auto upgrade starting...");
     ESPhttpUpdate.rebootOnUpdate(false);
-    t_httpUpdate_return ret = ESPhttpUpdate.update(SETTINGS_SERVER, 81, SETTINGS_BASE_URL + SETTINGS_OTA_BIN_URL + firmwareBin);
+    t_httpUpdate_return ret = ESPhttpUpdate.update(settingsServer.settingsServer, settingsServer.settingsPort, settingsServer.settingsBaseUrl + settingsServer.settingsOtaBinUrl + firmwareBin);
     Serial.println("Auto upgrade finished.");
     Serial.print("ret "); Serial.println(ret);
     switch (ret) {
@@ -589,7 +590,7 @@ void updateData(bool isInitialBoot) {
   getChineseNewsData();
   if (!isInitialBoot)
   {
-    writeDataWebSite(serialNumber, previousTemp, previousHumidity, currentWeather.tmp, currentWeather.hum, 0);
+    writeDataWebSite(&settingsServer, serialNumber, previousTemp, previousHumidity, currentWeather.tmp, currentWeather.hum, 0);
   }
   readyForWeatherUpdate = false;
 }
@@ -1029,4 +1030,3 @@ void getChineseNewsData() {
   getChineseNewsDataDetails(newsDataServer, "/rss/world.xml", NEWS_ENGLISH_SIZE, NEWS_WORLD_SIZE);
   getChineseNewsDataDetails(newsDataServer, "/rss/politics.xml", NEWS_ENGLISH_SIZE + NEWS_WORLD_SIZE, NEWS_POLITICS_SIZE);
 }
-
