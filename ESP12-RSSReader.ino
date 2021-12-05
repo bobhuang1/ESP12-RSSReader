@@ -1,7 +1,6 @@
 #include <DHT.h>
 #include <DHT_U.h>
 #include <ESP8266WiFi.h>
-#include <ESPHTTPClient.h>
 #include <JsonListener.h>
 #include <stdio.h>
 #include <time.h>                   // struct timeval
@@ -10,45 +9,34 @@
 #include <Arduino.h>
 #include <U8g2lib.h>
 #include <SPI.h>
-#include <WiFiManager.h>
 #include <ESP8266httpUpdate.h>
 #include "FS.h"
 #include "HeWeatherCurrent.h"
-#include "GarfieldCommon.h"
+#include "WeatherFonts.h"
 
-#define CURRENT_VERSION 4
-//#define DEBUG
-//#define USE_WIFI_MANAGER     // disable to NOT use WiFi manager, enable to use
+#define CURRENT_VERSION 5
+#define DEBUG
 #define LANGUAGE_CN  // LANGUAGE_CN or LANGUAGE_EN
 #define USE_HIGH_ALARM       // disable - LOW alarm sounds, enable - HIGH alarm sounds. Enable for all serials.
 //#define SHOW_US_CITIES  // disable to NOT to show Fremont and NY, enable to show. Disable for all serials.
 
-// Use 1 for serial 400-406 (400.bin), 2 for serial 407 (407.bin)!!!
-#define DISPLAY_TYPE 1   // 1-BIG 12864, 2-MINI 12864, 3-New Big BLUE 12864, to use 3, you must change u8x8_d_st7565.c as well!!!, 4- New BLUE 12864-ST7920
-
-
 // Serial 400 to 407
-int serialNumber = -1;
-String Location = "Default";
-String Token = "Token";
-int Resistor = 80000;
+
+int displayContrast = 135;
+int displayMaximumLevel = 1023;
+int displayMinimumLevel = 25;
+int temperatureMultiplier = 100;
+int temperatureBias = -1;
+int humidityMultiplier = 100;
+int humidityBias = 4;
+int displayMultiplier = 200;
+int displayBias = 0;
+
 bool dummyMode = false;
 bool backlightOffMode = false;
-bool sendAlarmEmail = false;
-String alarmEmailAddress = "Email";
-int displayContrast = 128;
-int displayMultiplier = 100;
-int displayBias = 0;
-int displayMinimumLevel = 1;
-int displayMaximumLevel = 1023;
-int temperatureMultiplier = 100;
-int temperatureBias = 0;
-int humidityMultiplier = 100;
-int humidityBias = 0;
-int firmwareversion = 0;
-String firmwareBin = "";
 
-SettingsServerStruct settingsServer;
+// Use 1 for serial 400-406 (400.bin), 2 for serial 407 (407.bin)!!!
+#define DISPLAY_TYPE 1   // 1-BIG 12864, 2-MINI 12864, 3-New Big BLUE 12864, to use 3, you must change u8x8_d_st7565.c as well!!!, 4- New BLUE 12864-ST7920
 
 // BIN files:
 // 400.bin for serial 400 to 406
@@ -61,6 +49,8 @@ SettingsServerStruct settingsServer;
 #define ALARMPIN 5
 #define BACKLIGHTPIN 0 // 2, 0
 
+
+
 #if DISPLAY_TYPE == 3
 #define BIGBLUE12864
 #endif
@@ -71,16 +61,26 @@ const String HEWEATHER_LANGUAGE = "zh"; // zh for Chinese, en for English
 const String HEWEATHER_LANGUAGE = "en"; // zh for Chinese, en for English
 #endif
 
-#ifdef USE_WIFI_MANAGER
-const String HEWEATHER_LOCATION = "auto_ip"; // Get location from IP address
-#else
 const String HEWEATHER_LOCATION = "CN101210202"; // Changxing
-#endif
 
 #ifdef SHOW_US_CITIES
 const String HEWEATHER_LOCATION1 = "US3290117";
 const String HEWEATHER_LOCATION2 = "US5392171";
 #endif
+
+#define TZ              8       // (utc+) TZ in hours
+#define DST_MN          0      // use 60mn for summer time in some countries
+#define TZ_MN           ((TZ)*60)
+#define TZ_SEC          ((TZ)*3600)
+#define DST_SEC         ((DST_MN)*60)
+#define UPDATE_INTERVAL_SECS 20 * 60 // Update every 20 minutes
+
+const String HEWEATHER_APP_ID = "d72b42bcfc994cfe9099eddc9647c6f2";
+
+const int weatherBeginHour = 7; // inclusive
+const int weatherEndHour = 22; // exclusive
+
+const char NTP_SERVER[] = "ntp.aliyun.com";
 
 #ifdef LANGUAGE_CN
 const String WDAY_NAMES[] = { "星期天", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六" };
@@ -242,27 +242,11 @@ void setup() {
            );
   delay(1000);
 
-  drawProgress(String(CompileDate), String(CURRENT_VERSION));
-  delay(1000);
-
-  drawProgress("Backlight Level", "Test");
-
-  selfTestBacklight(BACKLIGHTPIN);
-
-#ifdef USE_WIFI_MANAGER
-  drawProgress("连接WIFI:", "IBECloc12864-HW");
-#else
   drawProgress("连接WIFI中,", "请稍等...");
-#endif
-
-  connectWIFI(
-#ifdef USE_WIFI_MANAGER
-    true
-#else
-    false
-#endif
-  );
-
+  
+  // Connect WiFi
+  connectWiFi();
+  
   if (WiFi.status() != WL_CONNECTED) ESP.restart();
 
   // Get time from network time service
@@ -271,101 +255,6 @@ void setup() {
 #endif
   drawProgress("连接WIFI成功,", "正在同步时间...");
   configTime(TZ_SEC, DST_SEC, NTP_SERVER);
-  readValueWebSite(&settingsServer, serialNumber, Location, Token, Resistor, dummyMode, backlightOffMode, sendAlarmEmail, alarmEmailAddress, displayContrast, displayMultiplier, displayBias, displayMinimumLevel, displayMaximumLevel, temperatureMultiplier, temperatureBias, humidityMultiplier, humidityBias, firmwareversion, firmwareBin);
-  if (serialNumber < 0)
-  {
-    drawProgress("新MAC " + String(WiFi.macAddress()), "序列号: " + String(serialNumber));
-    stopApp();
-  }
-  else if (serialNumber == 0)
-  {
-    drawProgress("多MAC " + String(WiFi.macAddress()), "找管理员处理");
-    stopApp();
-  }
-  setContrastSub();
-  drawProgress("Serial: " + String(serialNumber), "MAC: " + String(WiFi.macAddress()));
-  delay(1500);
-  Serial.print("MAC: ");
-  Serial.println(String(WiFi.macAddress()));
-  Serial.print("Serial: ");
-  Serial.println(serialNumber);
-  Serial.print("Location: ");
-  Serial.println(Location);
-  Serial.print("Token: ");
-  Serial.println(Token);
-  Serial.print("Resistor: ");
-  Serial.println(Resistor);
-  Serial.print("dummyMode: ");
-  Serial.println(dummyMode);
-  Serial.print("backlightOffMode: ");
-  Serial.println(backlightOffMode);
-  Serial.print("sendAlarmEmail: ");
-  Serial.println(sendAlarmEmail);
-  Serial.print("alarmEmailAddress: ");
-  Serial.println(alarmEmailAddress);
-  Serial.print("displayContrast: ");
-  Serial.println(displayContrast);
-  Serial.print("displayMultiplier: ");
-  Serial.println(displayMultiplier);
-  Serial.print("displayBias: ");
-  Serial.println(displayBias);
-  Serial.print("displayMinimumLevel: ");
-  Serial.println(displayMinimumLevel);
-  Serial.print("displayMaximumLevel: ");
-  Serial.println(displayMaximumLevel);
-  Serial.print("temperatureMultiplier: ");
-  Serial.println(temperatureMultiplier);
-  Serial.print("temperatureBias: ");
-  Serial.println(temperatureBias);
-  Serial.print("humidityMultiplier: ");
-  Serial.println(humidityMultiplier);
-  Serial.print("humidityBias: ");
-  Serial.println(humidityBias);
-  Serial.print("firmwareversion: ");
-  Serial.println(firmwareversion);
-  Serial.print("CURRENT_VERSION: ");
-  Serial.println(CURRENT_VERSION);
-  Serial.print("firmwareBin: ");
-  Serial.println(settingsServer.settingsBaseUrl + settingsServer.settingsOtaBinUrl + firmwareBin);
-  Serial.println("");
-  writeBootWebSite(&settingsServer, serialNumber);
-  if (firmwareversion > CURRENT_VERSION)
-  {
-    drawProgress("自动升级中!", "请稍候......");
-    Serial.println("Auto upgrade starting...");
-    ESPhttpUpdate.rebootOnUpdate(false);
-    t_httpUpdate_return ret = ESPhttpUpdate.update(settingsServer.settingsServer, settingsServer.settingsPort, settingsServer.settingsBaseUrl + settingsServer.settingsOtaBinUrl + firmwareBin);
-    Serial.println("Auto upgrade finished.");
-    Serial.print("ret "); Serial.println(ret);
-    switch (ret) {
-      case HTTP_UPDATE_FAILED:
-        Serial.printf("HTTP_UPDATE_FAILED Error (%d): %s\n", ESPhttpUpdate.getLastError(), ESPhttpUpdate.getLastErrorString().c_str());
-        drawProgress("升级错误!", "重启!");
-        delay(2000);
-        ESP.restart();
-        break;
-      case HTTP_UPDATE_NO_UPDATES:
-        Serial.println("HTTP_UPDATE_NO_UPDATES");
-        drawProgress("无需升级!", "继续启动...");
-        delay(1500);
-        break;
-      case HTTP_UPDATE_OK:
-        Serial.println("HTTP_UPDATE_OK");
-        drawProgress("升级成功!", "重启...");
-        delay(2000);
-        ESP.restart();
-        break;
-      default:
-        Serial.print("Undefined HTTP_UPDATE Code: "); Serial.println(ret);
-        drawProgress("升级错误!", "重启!");
-        delay(2000);
-        ESP.restart();
-    }
-  }
-  else
-  {
-    drawProgress("无需自动升级!", "继续启动...");
-  }
   drawProgress("同步时间成功,", "正在更新天气数据...");
   updateData(true);
   timeSinceLastWUpdate = millis();
@@ -588,10 +477,6 @@ void updateData(bool isInitialBoot) {
     drawProgress("正在更新...", "中文新闻...");
   }
   getChineseNewsData();
-  if (!isInitialBoot)
-  {
-    writeDataWebSite(&settingsServer, serialNumber, previousTemp, previousHumidity, currentWeather.tmp, currentWeather.hum, 0);
-  }
   readyForWeatherUpdate = false;
 }
 
@@ -1029,4 +914,391 @@ void getChineseNewsData() {
 
   getChineseNewsDataDetails(newsDataServer, "/rss/world.xml", NEWS_ENGLISH_SIZE, NEWS_WORLD_SIZE);
   getChineseNewsDataDetails(newsDataServer, "/rss/politics.xml", NEWS_ENGLISH_SIZE + NEWS_WORLD_SIZE, NEWS_POLITICS_SIZE);
+}
+
+const char* WIFI_SSID[] = {"ibehome", "ibetest", "ibehomen", "TYCP", "Tenda_301"};
+const char* WIFI_PWD[] = {"tianwanggaidihu", "tianwanggaidihu", "tianwanggaidihu", "5107458970", "5107458970"};
+#define numWIFIs (sizeof(WIFI_SSID)/sizeof(char *))
+#define WIFI_TRY 30
+
+void connectWiFi()
+{
+  Serial.println("connectWiFi begin");
+  if (WiFi.status() == WL_CONNECTED) return;
+  int intPreferredWIFI = 0;
+  WiFi.persistent(false);
+  WiFi.mode(WIFI_STA);
+  WiFi.disconnect();
+
+  int n = WiFi.scanNetworks();
+  if (n == 0)
+  {
+  }
+  else
+  {
+    for (int i = 0; i < n; ++i)
+    {
+      for (int j = 0; j < numWIFIs; j++)
+      {
+        if (strcmp(WIFI_SSID[j], string2char(WiFi.SSID(i))) == 0)
+        {
+          intPreferredWIFI = j;
+          break;
+        }
+      }
+    }
+  }
+
+  WiFi.persistent(true);
+  WiFi.begin(WIFI_SSID[intPreferredWIFI], WIFI_PWD[intPreferredWIFI]);
+  int WIFIcounter = intPreferredWIFI;
+  while (WiFi.status() != WL_CONNECTED) {
+    int counter = 0;
+    while (counter < WIFI_TRY && WiFi.status() != WL_CONNECTED)
+    {
+      if (WiFi.status() == WL_CONNECTED) break;
+      delay(500);
+      if (WiFi.status() == WL_CONNECTED) break;
+      counter++;
+    }
+    if (WiFi.status() == WL_CONNECTED) break;
+    WIFIcounter++;
+    if (WIFIcounter >= numWIFIs) WIFIcounter = 0;
+    WiFi.begin(WIFI_SSID[WIFIcounter], WIFI_PWD[WIFIcounter]);
+  }
+  Serial.println("connectWiFi end");
+  return;
+}
+
+void noBeep(int alarmPin, bool useHighAlarm) {
+  if (useHighAlarm)
+  {
+    digitalWrite(alarmPin, LOW);
+  }
+  else
+  {
+    digitalWrite(alarmPin, HIGH);
+  }
+}
+
+void shortBeep(int alarmPin, bool useHighAlarm) {
+  if (useHighAlarm)
+  {
+    digitalWrite(alarmPin, HIGH);
+    delay(150);
+    digitalWrite(alarmPin, LOW);
+  }
+  else
+  {
+    digitalWrite(alarmPin, LOW);
+    delay(150);
+    digitalWrite(alarmPin, HIGH);
+  }
+}
+
+void longBeep(int alarmPin, bool useHighAlarm) {
+  if (useHighAlarm)
+  {
+    digitalWrite(alarmPin, HIGH);
+    delay(2000);
+    digitalWrite(alarmPin, LOW);
+  }
+  else
+  {
+    digitalWrite(alarmPin, LOW);
+    delay(2000);
+    digitalWrite(alarmPin, HIGH);
+  }
+}
+
+char* string2char(String command) {
+  if (command.length() != 0) {
+    char *p = const_cast<char*>(command.c_str());
+    return p;
+  }
+}
+
+void listSPIFFSFiles(void) {
+
+  if (!SPIFFS.begin()) {
+#ifdef DEBUG
+    Serial.println("SPIFFS initialization failed!");
+#endif
+    while (1) yield(); // Stay here twiddling thumbs waiting
+  }
+
+#ifdef DEBUG
+  Serial.println("\r\nInitialization done.");
+#endif
+
+#ifdef DEBUG
+  Serial.println();
+  Serial.println("SPIFFS files found:");
+#endif
+  fs::Dir dir = SPIFFS.openDir("/"); // Root directory
+  String  line = "=====================================";
+
+#ifdef DEBUG
+  Serial.println(line);
+  Serial.println("  File name               Size");
+  Serial.println(line);
+#endif
+
+  while (dir.next()) {
+    String fileName = dir.fileName();
+#ifdef DEBUG
+    Serial.print(fileName);
+#endif
+    int spaces = 25 - fileName.length(); // Tabulate nicely
+    if (spaces < 0) spaces = 1;
+#ifdef DEBUG
+    while (spaces--) Serial.print(" ");
+#endif
+    fs::File f = dir.openFile("r");
+#ifdef DEBUG
+    Serial.print(f.size()); Serial.println(" bytes");
+#endif
+    yield();
+  }
+#ifdef DEBUG
+  Serial.println(line);
+  Serial.println();
+#endif
+  delay(1000);
+}
+
+String chooseMeteocon(String stringInput) {
+  time_t nowTime = time(nullptr);
+  struct tm* timeInfo;
+  timeInfo = localtime(&nowTime);
+
+  if (timeInfo->tm_hour > 6 && timeInfo->tm_hour < 18)
+  {
+    return stringInput.substring(0, 1);
+  }
+  else
+  {
+    return stringInput.substring(1, 2);
+  }
+}
+
+String windDirectionTranslate(String stringInput) {
+  String stringReturn = stringInput;
+  stringReturn.replace("N", "北");
+  stringReturn.replace("S", "南");
+  stringReturn.replace("E", "东");
+  stringReturn.replace("W", "西");
+  stringReturn.replace("无持续", "无");
+  return stringReturn;
+}
+
+void turnOffBacklight(int backLightPin, int minimumBackLight) {
+  analogWrite(backLightPin, minimumBackLight); // Maximum is 1023
+}
+
+String convertPoemNumberToFileName(int poemNumber, int totalPoems) {
+  String returnText = "";
+  if (totalPoems > 99)
+  {
+    if (poemNumber < 10)
+    {
+      returnText = "00" + String(poemNumber);
+    }
+    else if (poemNumber < 100)
+    {
+      returnText = "0" + String(poemNumber);
+    }
+    else
+    {
+      returnText = String(poemNumber);
+    }
+  }
+  else
+  {
+    if (poemNumber < 10)
+    {
+      returnText = "0" + String(poemNumber);
+    }
+    else
+    {
+      returnText = String(poemNumber);
+    }
+  }
+  return "/" + returnText + ".h";
+}
+
+String generateMathQuestion(String &Answer) {
+  const String strPlusSign = "+";
+  const String strMinusSign = "-";
+  const String strMultiplySign = "X";
+  const String strDivideySign = String((char)247);
+  const String strEqualSign = "=";
+  String MathQuestion = "";
+  int intFirstOperationType = random(1, 4); // 1 - plus, 2 - minus, 3 - multiply
+  int intSecondOperationType = 1;
+  int intFirstNumber = 1;
+  int intSecondNumber = 1;
+  int intThirdNumber = 1;
+
+  if (intFirstOperationType == 3)
+  {
+    intSecondOperationType = random(1, 3);
+    intFirstNumber = random(1, 10);
+    intSecondNumber = random(1, 10);
+    if (intSecondOperationType == 2)
+    {
+      intThirdNumber = random(1, intFirstNumber * intSecondNumber);
+      MathQuestion = String(intFirstNumber) + strMultiplySign + String(intSecondNumber) + strMinusSign + String(intThirdNumber) + strEqualSign + "?";
+      Answer = String(intFirstNumber) + strMultiplySign + String(intSecondNumber) + strMinusSign + String(intThirdNumber) + strEqualSign + String(intFirstNumber * intSecondNumber - intThirdNumber);
+    }
+    else
+    {
+      intThirdNumber = random(1, 100);
+      MathQuestion = String(intFirstNumber) + strMultiplySign + String(intSecondNumber) + strPlusSign + String(intThirdNumber) + strEqualSign + "?";
+      Answer = String(intFirstNumber) + strMultiplySign + String(intSecondNumber) + strPlusSign + String(intThirdNumber) + strEqualSign + String(intFirstNumber * intSecondNumber + intThirdNumber);
+    }
+  }
+  else if (intFirstOperationType == 2)
+  {
+    intSecondOperationType = random(1, 4);
+    intFirstNumber = random(50, 100);
+    if (intSecondOperationType == 1)
+    {
+      intSecondNumber = random(0, intFirstNumber);
+      intThirdNumber = random(1, 100);
+      MathQuestion = String(intFirstNumber) + strMinusSign + String(intSecondNumber) + strPlusSign + String(intThirdNumber) + strEqualSign + "?";
+      Answer = String(intFirstNumber) + strMinusSign + String(intSecondNumber) + strPlusSign + String(intThirdNumber) + strEqualSign + String(intFirstNumber - intSecondNumber + intThirdNumber);
+    }
+    else if (intSecondOperationType == 2)
+    {
+      intSecondNumber = random(30, intFirstNumber);
+      intThirdNumber = random(1, (intFirstNumber - intSecondNumber));
+      MathQuestion = String(intFirstNumber) + strMinusSign + String(intSecondNumber) + strMinusSign + String(intThirdNumber) + strEqualSign + "?";
+      Answer = String(intFirstNumber) + strMinusSign + String(intSecondNumber) + strMinusSign + String(intThirdNumber) + strEqualSign + String(intFirstNumber - intSecondNumber - intThirdNumber);
+    }
+    else // multiply
+    {
+      intSecondNumber = random(1, 10);
+      intThirdNumber = random(1, 10);
+      intFirstNumber = random(intSecondNumber * intThirdNumber, 100);
+      MathQuestion = String(intFirstNumber) + strMinusSign + String(intSecondNumber) + strMultiplySign + String(intThirdNumber) + strEqualSign + "?";
+      Answer = String(intFirstNumber) + strMinusSign + String(intSecondNumber) + strMultiplySign + String(intThirdNumber) + strEqualSign + String(intFirstNumber - (intSecondNumber * intThirdNumber));
+    }
+  }
+  else // first operation is plus
+  {
+    intSecondOperationType = random(1, 4);
+    intFirstNumber = random(1, 100);
+    if (intSecondOperationType == 1)
+    {
+      intSecondNumber = random(1, 100);
+      intThirdNumber = random(1, 100);
+      MathQuestion = String(intFirstNumber) + strPlusSign + String(intSecondNumber) + strPlusSign + String(intThirdNumber) + strEqualSign + "?";
+      Answer = String(intFirstNumber) + strPlusSign + String(intSecondNumber) + strPlusSign + String(intThirdNumber) + strEqualSign + String(intFirstNumber + intSecondNumber + intThirdNumber);
+    }
+    else if (intSecondOperationType == 2)
+    {
+      intSecondNumber = random(1, 100);
+      intThirdNumber = random(1, (intFirstNumber - intSecondNumber));
+      MathQuestion = String(intFirstNumber) + strPlusSign + String(intSecondNumber) + strMinusSign + String(intThirdNumber) + strEqualSign + "?";
+      Answer = String(intFirstNumber) + strPlusSign + String(intSecondNumber) + strMinusSign + String(intThirdNumber) + strEqualSign + String(intFirstNumber + intSecondNumber - intThirdNumber);
+    }
+    else
+    {
+      intSecondNumber = random(1, 10);
+      intThirdNumber = random(1, 10);
+      MathQuestion = String(intFirstNumber) + strPlusSign + String(intSecondNumber) + strMultiplySign + String(intThirdNumber) + strEqualSign + "?";
+      Answer = String(intFirstNumber) + strPlusSign + String(intSecondNumber) + strMultiplySign + String(intThirdNumber) + strEqualSign + String(intFirstNumber + (intSecondNumber * intThirdNumber));
+    }
+  }
+  return MathQuestion;
+}
+
+void adjustBacklight(int(&lightLevel)[10], int backLightPin, int intBiasLevel, int intDynamicLevel) {
+  // intBiasLevel is used to adjust dynamic range of the backlight vs light resistor
+  // it should be between 50 and 200
+  for (int i = 0; i < 9; ++i)
+  {
+    lightLevel[i] = lightLevel[i + 1]; // shift value forward
+  }
+  lightLevel[9] = analogRead(A0); // 0 very strong light, 200 and above dark, read new value
+  int lightLevelSum = 0;
+  for (int i = 0; i < 10; ++i)
+  {
+    lightLevelSum += lightLevel[i];
+  }
+
+  lightLevelSum = (lightLevelSum / 10 - 50 + intBiasLevel) * intDynamicLevel / 100;
+#ifdef DEBUG
+  Serial.print("Light Level: ");
+  Serial.println(lightLevelSum);
+#endif
+  if (lightLevelSum < 10)
+  {
+    analogWrite(backLightPin, 1023); // Maximum is 1023
+  }
+  else if (lightLevelSum < 15)
+  {
+    analogWrite(backLightPin, 1000); // Maximum is 1023
+  }
+  else if (lightLevelSum < 20)
+  {
+    analogWrite(backLightPin, 900); // Maximum is 1023
+  }
+  else if (lightLevelSum < 25)
+  {
+    analogWrite(backLightPin, 800); // Maximum is 1023
+  }
+  else if (lightLevelSum < 30)
+  {
+    analogWrite(backLightPin, 700); // Maximum is 1023
+  }
+  else if (lightLevelSum < 35)
+  {
+    analogWrite(backLightPin, 600); // Maximum is 1023
+  }
+  else if (lightLevelSum < 40)
+  {
+    analogWrite(backLightPin, 500); // Maximum is 1023
+  }
+  else if (lightLevelSum < 45)
+  {
+    analogWrite(backLightPin, 400); // Maximum is 1023
+  }
+  else if (lightLevelSum < 50)
+  {
+    analogWrite(backLightPin, 300); // Maximum is 1023
+  }
+  else if (lightLevelSum < 60)
+  {
+    analogWrite(backLightPin, 200); // Maximum is 1023
+  }
+  else if (lightLevelSum < 75)
+  {
+    analogWrite(backLightPin, 100); // Maximum is 1023
+  }
+  else if (lightLevelSum < 100)
+  {
+    analogWrite(backLightPin, 75); // Maximum is 1023
+  }
+  else if (lightLevelSum < 150)
+  {
+    analogWrite(backLightPin, 50); // Maximum is 1023
+  }
+  else if (lightLevelSum < 250)
+  {
+    analogWrite(backLightPin, 25); // Maximum is 1023
+  }
+  else if (lightLevelSum < 400)
+  {
+    analogWrite(backLightPin, 12); // Maximum is 1023
+  }
+  else if (lightLevelSum < 600)
+  {
+    analogWrite(backLightPin, 6); // Maximum is 1023
+  }
+  else
+  {
+    analogWrite(backLightPin, 3); // Maximum is 1023
+  }
 }
