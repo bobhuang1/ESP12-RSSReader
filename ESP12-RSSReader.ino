@@ -1,7 +1,6 @@
 #include <DHT.h>
 #include <DHT_U.h>
 #include <ESP8266WiFi.h>
-#include <ESPHTTPClient.h>
 #include <JsonListener.h>
 #include <stdio.h>
 #include <time.h>                   // struct timeval
@@ -11,13 +10,12 @@
 #include <U8g2lib.h>
 #include <SPI.h>
 #include <WiFiManager.h>
-#include <ESP8266httpUpdate.h>
 #include "FS.h"
 #include "HeWeatherCurrent.h"
 #include "GarfieldCommon.h"
 
-#define CURRENT_VERSION 4
-//#define DEBUG
+#define CURRENT_VERSION 5
+#define DEBUG
 //#define USE_WIFI_MANAGER     // disable to NOT use WiFi manager, enable to use
 #define LANGUAGE_CN  // LANGUAGE_CN or LANGUAGE_EN
 #define USE_HIGH_ALARM       // disable - LOW alarm sounds, enable - HIGH alarm sounds. Enable for all serials.
@@ -28,27 +26,18 @@
 
 
 // Serial 400 to 407
-int serialNumber = -1;
-String Location = "Default";
-String Token = "Token";
 int Resistor = 80000;
 bool dummyMode = false;
 bool backlightOffMode = false;
-bool sendAlarmEmail = false;
-String alarmEmailAddress = "Email";
-int displayContrast = 128;
-int displayMultiplier = 100;
-int displayBias = 0;
+int displayContrast = 135;
+int displayMultiplier = 200;
+int displayBias = 25;
 int displayMinimumLevel = 1;
 int displayMaximumLevel = 1023;
 int temperatureMultiplier = 100;
 int temperatureBias = 0;
-int humidityMultiplier = 100;
+int humidityMultiplier = 76;
 int humidityBias = 0;
-int firmwareversion = 0;
-String firmwareBin = "";
-
-SettingsServerStruct settingsServer;
 
 // BIN files:
 // 400.bin for serial 400 to 406
@@ -271,101 +260,7 @@ void setup() {
 #endif
   drawProgress("连接WIFI成功,", "正在同步时间...");
   configTime(TZ_SEC, DST_SEC, NTP_SERVER);
-  readValueWebSite(&settingsServer, serialNumber, Location, Token, Resistor, dummyMode, backlightOffMode, sendAlarmEmail, alarmEmailAddress, displayContrast, displayMultiplier, displayBias, displayMinimumLevel, displayMaximumLevel, temperatureMultiplier, temperatureBias, humidityMultiplier, humidityBias, firmwareversion, firmwareBin);
-  if (serialNumber < 0)
-  {
-    drawProgress("新MAC " + String(WiFi.macAddress()), "序列号: " + String(serialNumber));
-    stopApp();
-  }
-  else if (serialNumber == 0)
-  {
-    drawProgress("多MAC " + String(WiFi.macAddress()), "找管理员处理");
-    stopApp();
-  }
   setContrastSub();
-  drawProgress("Serial: " + String(serialNumber), "MAC: " + String(WiFi.macAddress()));
-  delay(1500);
-  Serial.print("MAC: ");
-  Serial.println(String(WiFi.macAddress()));
-  Serial.print("Serial: ");
-  Serial.println(serialNumber);
-  Serial.print("Location: ");
-  Serial.println(Location);
-  Serial.print("Token: ");
-  Serial.println(Token);
-  Serial.print("Resistor: ");
-  Serial.println(Resistor);
-  Serial.print("dummyMode: ");
-  Serial.println(dummyMode);
-  Serial.print("backlightOffMode: ");
-  Serial.println(backlightOffMode);
-  Serial.print("sendAlarmEmail: ");
-  Serial.println(sendAlarmEmail);
-  Serial.print("alarmEmailAddress: ");
-  Serial.println(alarmEmailAddress);
-  Serial.print("displayContrast: ");
-  Serial.println(displayContrast);
-  Serial.print("displayMultiplier: ");
-  Serial.println(displayMultiplier);
-  Serial.print("displayBias: ");
-  Serial.println(displayBias);
-  Serial.print("displayMinimumLevel: ");
-  Serial.println(displayMinimumLevel);
-  Serial.print("displayMaximumLevel: ");
-  Serial.println(displayMaximumLevel);
-  Serial.print("temperatureMultiplier: ");
-  Serial.println(temperatureMultiplier);
-  Serial.print("temperatureBias: ");
-  Serial.println(temperatureBias);
-  Serial.print("humidityMultiplier: ");
-  Serial.println(humidityMultiplier);
-  Serial.print("humidityBias: ");
-  Serial.println(humidityBias);
-  Serial.print("firmwareversion: ");
-  Serial.println(firmwareversion);
-  Serial.print("CURRENT_VERSION: ");
-  Serial.println(CURRENT_VERSION);
-  Serial.print("firmwareBin: ");
-  Serial.println(settingsServer.settingsBaseUrl + settingsServer.settingsOtaBinUrl + firmwareBin);
-  Serial.println("");
-  writeBootWebSite(&settingsServer, serialNumber);
-  if (firmwareversion > CURRENT_VERSION)
-  {
-    drawProgress("自动升级中!", "请稍候......");
-    Serial.println("Auto upgrade starting...");
-    ESPhttpUpdate.rebootOnUpdate(false);
-    t_httpUpdate_return ret = ESPhttpUpdate.update(settingsServer.settingsServer, settingsServer.settingsPort, settingsServer.settingsBaseUrl + settingsServer.settingsOtaBinUrl + firmwareBin);
-    Serial.println("Auto upgrade finished.");
-    Serial.print("ret "); Serial.println(ret);
-    switch (ret) {
-      case HTTP_UPDATE_FAILED:
-        Serial.printf("HTTP_UPDATE_FAILED Error (%d): %s\n", ESPhttpUpdate.getLastError(), ESPhttpUpdate.getLastErrorString().c_str());
-        drawProgress("升级错误!", "重启!");
-        delay(2000);
-        ESP.restart();
-        break;
-      case HTTP_UPDATE_NO_UPDATES:
-        Serial.println("HTTP_UPDATE_NO_UPDATES");
-        drawProgress("无需升级!", "继续启动...");
-        delay(1500);
-        break;
-      case HTTP_UPDATE_OK:
-        Serial.println("HTTP_UPDATE_OK");
-        drawProgress("升级成功!", "重启...");
-        delay(2000);
-        ESP.restart();
-        break;
-      default:
-        Serial.print("Undefined HTTP_UPDATE Code: "); Serial.println(ret);
-        drawProgress("升级错误!", "重启!");
-        delay(2000);
-        ESP.restart();
-    }
-  }
-  else
-  {
-    drawProgress("无需自动升级!", "继续启动...");
-  }
   drawProgress("同步时间成功,", "正在更新天气数据...");
   updateData(true);
   timeSinceLastWUpdate = millis();
@@ -588,10 +483,6 @@ void updateData(bool isInitialBoot) {
     drawProgress("正在更新...", "中文新闻...");
   }
   getChineseNewsData();
-  if (!isInitialBoot)
-  {
-    writeDataWebSite(&settingsServer, serialNumber, previousTemp, previousHumidity, currentWeather.tmp, currentWeather.hum, 0);
-  }
   readyForWeatherUpdate = false;
 }
 
