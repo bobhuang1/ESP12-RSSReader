@@ -57,7 +57,7 @@ Big Blue 12864
 03 CS GPIO 13 D7
 02 LED- 背光地
 01 LED+ 背光正 3.3V or PWM Output
-U8G2_ST7565_64128N_F_4W_SW_SPI display(U8G2_R2, /* clock=*/ 14, /* data=*/ 12, /* cs=*/ 13, /* dc=*/ 15, /* reset=*/ 16); // U8G2_ST7565_64128N_F_4W_SW_SPI
+U8G2_ST7565_64128N_F_4W_SW_SPI display(U8G2_R2, /* clock=*/ 14, /* data=*/ 12, /* cs=*/ 13, /* dc=*/ 15, /* reset=*/ 16);
 注意要改Aurdino U8G2库文件
 
 Blue ST9720 LCD
@@ -68,7 +68,7 @@ Blue ST9720 LCD
 6  E=CLK *** D5, GPIO 14
 19  BLA  背光源正极 *** 3.3V or PWM Output
 20  BLK  背光源负极　*** -> GND
-U8G2_ST7920_128X64_F_SW_SPI display(U8G2_R2, /* clo  ck=*/ 14 /* A4 */ , /* data=*/ 12 /* A2 */, /* CS=*/ 13 /* A3 */, /* reset=*/ U8X8_PIN_NONE); // 16, U8X8_PIN_NONE
+U8G2_ST7920_128X64_F_SW_SPI display(U8G2_R2, /* clo  ck=*/ 14 /* A4 */ , /* data=*/ 12 /* A2 */, /* CS=*/ 13 /* A3 */, /* reset=*/ U8X8_PIN_NONE);
 
 Big White 12864
 1 GND
@@ -81,4 +81,4 @@ Big White 12864
 8 RST A3=D17
 9 LED+ 3.3V or PWM
 10 LED- 
-
+U8G2_ST7920_128X64_F_SW_SPI u8g2(U8G2_R0, /* clo  ck=*/ 15 /* A4 */ , /* data=*/ 16 /* A2 */, /* CS=*/ 14 /* A3 */, /* reset=*/ 17);
