@@ -5,3 +5,4 @@ An RSS reader that can read American and Chinese headline news from two sites.
 It can also display current date/time, live temperature and humidity using a DHT module.
 See wiring.txt for interface details between EPS8266 and all peripherals.
 See 12864panels.txt for the four types of 12864 panels supported by this project.
+See 12864Sample X .jpg for sample photos of these panels.
