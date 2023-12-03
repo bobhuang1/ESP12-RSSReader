@@ -1,0 +1,73 @@
+1-BIG 12864, 2-MINI 12864, 3-New Big BLUE 12864, to use 3, you must change u8x8_d_st7565.c as well!!!, 4- New BLUE 12864-ST7920
+
+BIG 12864
+ 12864LCD    ESP-12
+1 CS    ->  GPIO 13 D7
+2 RST   ->  GPIO 16 D0
+3 RS/DC ->  GPIO 15 D8
+4 SCK   ->  GPIO 14 D5
+5 SDA   ->  GPIO 12 D6
+6 VCC   ->  VCC +5V 电源正
+7 GND   ->  GND 电源地
+8 LED-  ->  GND 背光地
+9 LED+  ->  3.3V or PWM Output 背光正
+U8G2_ST7565_LM6059_F_4W_SW_SPI display(U8G2_R2, /* clock=*/ 14, /* data=*/ 12, /* cs=*/ 13, /* dc=*/ 15, /* reset=*/ 16);
+
+Mini 12864
+1  VSS  电源地 ***
+2  VDD  电源正极（＋5V） ***
+3  VR  空脚不用
+4  AO/DC  数据/命令选择端（H/L） *** GPIO 15 D8
+5  R/W  读写控制信号（H/L） 不用
+6  E  使能信号 不用
+7  DB0  Data　I/O 不用
+8  DB1  Data　I/O 不用
+9  DB2  Data　I/O 不用
+10  DB3  Data　I/O 不用
+11  DB4  Data　I/O 不用
+12  DB5  Data　I/O 不用
+13  DB6  Data　I/O SCK *** GPIO 14 D5
+14  DB7  Data　I/O SDA*** GPIO 12 D6
+15  /CS  片选信号 *** GPIO 13 D7
+16  NC  空脚不用
+17  RST  复位端（H：正常工作，L：复位） *** GPIO 16 D0
+18  V0  空脚不用
+19  BLA  背光正 3.3V or PWM Output
+20  BLK  背光地
+U8G2_ST7565_64128N_F_4W_SW_SPI display(U8G2_R0, /* clock=*/ 14, /* data=*/ 12, /* cs=*/ 13, /* dc=*/ 15, /* reset=*/ 16);
+
+Big Blue 12864
+20 NC 不用
+19 P/S -> GND 接地
+18 C86 -> GND 接地
+17 GND (VDD) 电源地
+16 VCC (VSS) 电源正 +5V
+15 DB7/SDA (data) GPIO 12 D6
+14 DB6/SDC (Clock) GPIO 14 D5
+13 DB5 (NC) 不用
+12 DB4 (NC) 不用
+11 DB3 (NC) 不用
+10 DB2 (NC) 不用
+09 DB1 (NC) 不用
+08 DB0 (NC) 不用
+07 ERC (NC) 不用
+06 PWR (NC) 不用
+05 A0(RS)/DC GPIO 15 D8
+04 Reset GPIO 16 D0
+03 CS GPIO 13 D7
+02 LED- 背光地
+01 LED+ 背光正 3.3V or PWM Output
+U8G2_ST7565_64128N_F_4W_SW_SPI display(U8G2_R2, /* clock=*/ 14, /* data=*/ 12, /* cs=*/ 13, /* dc=*/ 15, /* reset=*/ 16); // U8G2_ST7565_64128N_F_4W_SW_SPI
+注意要改Aurdino U8G2库文件
+
+Blue ST9720 LCD
+1  VSS  电源地 ***
+2  VDD  电源正极（＋5V） ***
+4  RS=CS *** D0, GPIO 16
+5  RW=Data *** D6, GPIO 12
+6  E=CLK *** D5, GPIO 14
+19  BLA  背光源正极 *** 3.3V or PWM Output
+20  BLK  背光源负极　*** -> GND
+U8G2_ST7920_128X64_F_SW_SPI display(U8G2_R2, /* clo  ck=*/ 14 /* A4 */ , /* data=*/ 12 /* A2 */, /* CS=*/ 13 /* A3 */, /* reset=*/ U8X8_PIN_NONE); // 16, U8X8_PIN_NONE
+
+
