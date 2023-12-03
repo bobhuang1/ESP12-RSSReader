@@ -1,4 +1,4 @@
-1-BIG 12864, 2-MINI 12864, 3-New Big BLUE 12864, to use 3, you must change u8x8_d_st7565.c as well!!!, 4- New BLUE 12864-ST7920
+1-BIG 12864, 2-MINI 12864, 3-New Big BLUE 12864, to use 3, you must change u8x8_d_st7565.c as well!!!, 4- New BLUE 12864-ST7920, 5- Big White 12864
 
 BIG 12864
  12864LCD    ESP-12
@@ -70,4 +70,15 @@ Blue ST9720 LCD
 20  BLK  背光源负极　*** -> GND
 U8G2_ST7920_128X64_F_SW_SPI display(U8G2_R2, /* clo  ck=*/ 14 /* A4 */ , /* data=*/ 12 /* A2 */, /* CS=*/ 13 /* A3 */, /* reset=*/ U8X8_PIN_NONE); // 16, U8X8_PIN_NONE
 
+Big White 12864
+1 GND
+2 NC
+3 VCC +5V
+4 NC
+5 RS/CS A5=D19
+6 RW/SID/SDA A2=D16
+7 E/SCK A4=D18
+8 RST A3=D17
+9 LED+ 3.3V or PWM
+10 LED- 
 
