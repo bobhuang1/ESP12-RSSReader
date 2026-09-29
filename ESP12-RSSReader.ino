@@ -1,7 +1,7 @@
 #include <DHT.h>
 #include <DHT_U.h>
 #include <ESP8266WiFi.h>
-#include <ESPHTTPClient.h>
+#include <ESP8266HTTPClient.h> // was <ESPHTTPClient.h>, a header that no longer exists in any current core
 #include <JsonListener.h>
 #include <stdio.h>
 #include <time.h>                   // struct timeval
