@@ -1,32 +1,44 @@
 #include <DHT.h>
 #include <DHT_U.h>
 #include <ESP8266WiFi.h>
+#include <ESPHTTPClient.h>
 #include <JsonListener.h>
 #include <stdio.h>
 #include <time.h>                   // struct timeval
 #include <coredecls.h>                  // settimeofday_cb()
-#include <Timezone.h>
 #include <Arduino.h>
 #include <U8g2lib.h>
 #include <SPI.h>
 #include <WiFiManager.h>
 #include "FS.h"
-#include "HeWeatherCurrent.h"
-#include "GarfieldCommon.h"
+#include "WeatherApiWeather.h"
+#include "StringHelpers.h"
+#include "AlarmBeeper.h"
+#include "BacklightController.h"
+#include "WiFiMultiConnect.h"
+#include "WeatherDisplayHelpers.h"
+#include "BootSplashBitmap.h"
 
-#define CURRENT_VERSION 5
+// HISTORY: this sketch originally used the HeWeather (和风天气) client
+// (HeWeatherCurrent.h / GarfieldCommon.h, never committed to this repo) plus a
+// set of pre-library helper functions. HeWeather's free API has since changed
+// and the missing headers made the repo unbuildable, so the sketch was
+// migrated to the WeatherApiWeather client
+// (https://github.com/bobhuang1/esp8266-weather-WeatherApi) and the shared
+// modules from ESP8266-Functions-Common. The RSS news feed feature was
+// dropped at the same time (it was tied to the old helper generation and to
+// two brittle third-party feed layouts); the device now cycles local
+// conditions and the 3-day forecast, like the WeatherStation sketch.
+#define CURRENT_VERSION 6
 #define DEBUG
 //#define USE_WIFI_MANAGER     // disable to NOT use WiFi manager, enable to use
 #define LANGUAGE_CN  // LANGUAGE_CN or LANGUAGE_EN
 #define USE_HIGH_ALARM       // disable - LOW alarm sounds, enable - HIGH alarm sounds. Enable for all serials.
-//#define SHOW_US_CITIES  // disable to NOT to show Fremont and NY, enable to show. Disable for all serials.
 
 // Use 1 for serial 400-406 (400.bin), 2 for serial 407 (407.bin)!!!
 #define DISPLAY_TYPE 1   // 1-BIG 12864, 2-MINI 12864, 3-New Big BLUE 12864, to use 3, you must change u8x8_d_st7565.c as well!!!, 4- New BLUE 12864-ST7920
 
-
 // Serial 400 to 407
-int Resistor = 80000;
 bool dummyMode = false;
 bool backlightOffMode = false;
 int displayContrast = 135;
@@ -39,10 +51,13 @@ int temperatureBias = 0;
 int humidityMultiplier = 76;
 int humidityBias = 0;
 
-// BIN files:
-// 400.bin for serial 400 to 406
-// 407.bin for serial 407
+// Fill in your own SSID/password pairs (or better, use USE_WIFI_MANAGER above
+// instead of hardcoding any of this). Never commit real WiFi credentials.
+const char* const WIFI_SSIDS[] = {"YOUR_SSID_1", "YOUR_SSID_2", "YOUR_SSID_3"};
+const char* const WIFI_PASSWORDS[] = {"YOUR_PASSWORD_1", "YOUR_PASSWORD_2", "YOUR_PASSWORD_3"};
 
+const String WEATHERAPI_APP_ID = "YOUR_WEATHERAPI_COM_KEY"; // https://www.weatherapi.com/
+#define MAX_FORECASTS 5
 
 #define DHTTYPE  DHT11       // Sensor type DHT11/21/22/AM2301/AM2302
 #define BUTTONPIN   4
@@ -55,105 +70,47 @@ int humidityBias = 0;
 #endif
 
 #ifdef LANGUAGE_CN
-const String HEWEATHER_LANGUAGE = "zh"; // zh for Chinese, en for English
-#else ifdef LANGUAGE_EN
-const String HEWEATHER_LANGUAGE = "en"; // zh for Chinese, en for English
+const String WEATHERAPI_LANGUAGE = "zh"; // zh for Chinese, en for English
+#else
+const String WEATHERAPI_LANGUAGE = "en"; // zh for Chinese, en for English
 #endif
 
 #ifdef USE_WIFI_MANAGER
-const String HEWEATHER_LOCATION = "auto_ip"; // Get location from IP address
+const String WEATHERAPI_LOCATION = "auto:ip"; // WeatherAPI.com: resolve location from the request's IP address
 #else
-const String HEWEATHER_LOCATION = "CN101210202"; // Changxing
-#endif
-
-#ifdef SHOW_US_CITIES
-const String HEWEATHER_LOCATION1 = "US3290117";
-const String HEWEATHER_LOCATION2 = "US5392171";
+const String WEATHERAPI_LOCATION = "YOUR_CITY"; // e.g. "London", "New York", or "lat,lon" - see WeatherAPI.com docs
 #endif
 
 #ifdef LANGUAGE_CN
 const String WDAY_NAMES[] = { "星期天", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六" };
-#else ifdef LANGUAGE_EN
+#else
 const String WDAY_NAMES[] = { "SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT" };
-#endif
-
-#ifdef SHOW_US_CITIES
-// Japan, Tokyo
-TimeChangeRule japanRule = { "Japan", Last, Sun, Mar, 1, 540 };     // Japan
-Timezone Japan(japanRule);
-// Central European Time (Frankfurt, Paris)
-TimeChangeRule CEST = { "CEST", Last, Sun, Mar, 2, 120 };     // Central European Summer Time
-TimeChangeRule CET = { "CET ", Last, Sun, Oct, 3, 60 };       // Central European Standard Time
-Timezone CE(CEST, CET);
-// United Kingdom (London, Belfast)
-TimeChangeRule BST = { "BST", Last, Sun, Mar, 1, 60 };        // British Summer Time
-TimeChangeRule GMT = { "GMT", Last, Sun, Oct, 2, 0 };         // Standard Time
-Timezone UK(BST, GMT);
-// UTC
-TimeChangeRule utcRule = { "UTC", Last, Sun, Mar, 1, 0 };     // UTC
-Timezone UTC(utcRule);
-// US Eastern Time Zone (New York, Detroit)
-TimeChangeRule usEDT = { "EDT", Second, Sun, Mar, 2, -240 };  // Eastern Daylight Time = UTC - 4 hours
-TimeChangeRule usEST = { "EST", First, Sun, Nov, 2, -300 };   // Eastern Standard Time = UTC - 5 hours
-Timezone usET(usEDT, usEST);
-// US Central Time Zone (Chicago, Houston)
-TimeChangeRule usCDT = { "CDT", Second, Sun, Mar, 2, -300 };
-TimeChangeRule usCST = { "CST", First, Sun, Nov, 2, -360 };
-Timezone usCT(usCDT, usCST);
-// US Mountain Time Zone (Denver, Salt Lake City)
-TimeChangeRule usMDT = { "MDT", Second, Sun, Mar, 2, -360 };
-TimeChangeRule usMST = { "MST", First, Sun, Nov, 2, -420 };
-Timezone usMT(usMDT, usMST);
-// Arizona is US Mountain Time Zone but does not use DST
-Timezone usAZ(usMST);
-// US Pacific Time Zone (Las Vegas, Los Angeles)
-TimeChangeRule usPDT = { "PDT", Second, Sun, Mar, 2, -420 };
-TimeChangeRule usPST = { "PST", First, Sun, Nov, 2, -480 };
-Timezone usPT(usPDT, usPST);
 #endif
 
 #if (DHTPIN >= 0)
 DHT dht(DHTPIN, DHTTYPE);
 #endif
 
-HeWeatherCurrentData currentWeather;
-HeWeatherCurrent currentWeatherClient;
+WeatherApiCurrentData currentWeather;
+WeatherApiForecastData forecasts[MAX_FORECASTS];
+WeatherApiWeather weatherClient;
 
-#ifdef SHOW_US_CITIES
-HeWeatherCurrentData currentWeather1;
-HeWeatherCurrentData currentWeather2;
-HeWeatherCurrent currentWeatherClient1;
-HeWeatherCurrent currentWeatherClient2;
-#endif
+BacklightController backlight;
 
 #if DISPLAY_TYPE == 1
 U8G2_ST7565_LM6059_F_4W_SW_SPI display(U8G2_R2, /* clock=*/ 14, /* data=*/ 12, /* cs=*/ 13, /* dc=*/ 15, /* reset=*/ 16); // U8G2_ST7565_LM6059_F_4W_SW_SPI
-#define DISPLAY_CONTRAST 135
-#define DISPLAY_BIAS -25
-#define DISPLAY_MULTIPLIER 200
 #endif
 
 #if DISPLAY_TYPE == 2
 U8G2_ST7565_64128N_F_4W_SW_SPI display(U8G2_R0, /* clock=*/ 14, /* data=*/ 12, /* cs=*/ 13, /* dc=*/ 15, /* reset=*/ 16); // U8G2_ST7565_64128N_F_4W_SW_SPI
-#define DISPLAY_CONTRAST 103
-#define DISPLAY_BIAS 15
-#define DISPLAY_MULTIPLIER 200
 #endif
 
 #if DISPLAY_TYPE == 3
 U8G2_ST7565_64128N_F_4W_SW_SPI display(U8G2_R2, /* clock=*/ 14, /* data=*/ 12, /* cs=*/ 13, /* dc=*/ 15, /* reset=*/ 16); // U8G2_ST7565_64128N_F_4W_SW_SPI
-#define DISPLAY_CONTRAST 168
-#define DISPLAY_BIAS 30
-#define DISPLAY_MULTIPLIER 300
 #endif
 
 #if DISPLAY_TYPE == 4
 U8G2_ST7920_128X64_F_SW_SPI display(U8G2_R2, /* clo  ck=*/ 14 /* A4 */ , /* data=*/ 12 /* A2 */, /* CS=*/ 16 /* A3 */, /* reset=*/ U8X8_PIN_NONE); // 16, U8X8_PIN_NONE
-//#define BACKLIGHTPIN 15 // 2, 0
-//#define LIGHT_SENSOR   // turn off for ST7565, turn on for ST7920 with BHV1750/GY-30/GY-302 light sensor
-//#define LIGHT_SDA_PIN 0  // D3
-//#define LIGHT_SCL_PIN  13 // D7
-//BH1750 lightMeter(0x23);
 #endif
 
 time_t nowTime;
@@ -162,11 +119,13 @@ bool readyForWeatherUpdate = false;
 long timeSinceLastWUpdate = 0;
 float previousTemp = 0;
 float previousHumidity = 0;
-int lightLevel[10];
-int draw_state = 1; // 0 - Garfield,  1 - RSS page, 2 - Local clock 3 - Fremont clock, 4 - New York clock
 
+// Page cycling: 0-1 local conditions, 2-3 forecast day 1, 4-5 day 2, 6-7 day 3
 long timeSinceLastPageUpdate = 0;
 #define PAGE_UPDATE_INTERVAL 10*1000
+#define UPDATE_INTERVAL_SECS 1500
+int draw_state = 1;
+
 int buttonState;             // the current reading from the input pin
 int lastButtonState = LOW;   // the previous reading from the input pin
 // the following variables are unsigned longs because the time, measured in
@@ -174,30 +133,13 @@ int lastButtonState = LOW;   // the previous reading from the input pin
 unsigned long lastDebounceTime = 0;  // the last time the output pin was toggled
 const unsigned long debounceDelay = 30;    // the debounce time; increase if the output flickers
 
-int buttonPushCounter = 0;
-int lineCount = 0;
-
-#define NEWS_POLITICS_SIZE 10
-#define NEWS_WORLD_SIZE 20
-#define NEWS_ENGLISH_SIZE 10
-String newsText[NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE + NEWS_ENGLISH_SIZE];
-
-#if defined SHOW_US_CITIES && (NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE + NEWS_ENGLISH_SIZE) > 30
-#error *** When SHOW_US_CITIES is used, news items should not be more than 30 ***
-#endif
-
-#if not defined SHOW_US_CITIES && (NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE + NEWS_ENGLISH_SIZE > 40)
-#error *** When SHOW_US_CITIES is not used, news items should not be more than 40 ***
-#endif
-
-
 void setup() {
   delay(100);
   Serial.begin(115200);
 #ifdef DEBUG
   Serial.println("Begin");
 #endif
-  initializeBackLightArray(lightLevel, BACKLIGHTPIN);
+  backlight.begin(BACKLIGHTPIN);
   adjustBacklightSub();
 
 #if (DHTPIN >= 0)
@@ -206,14 +148,13 @@ void setup() {
 
   pinMode(BUTTONPIN, INPUT);
   pinMode(ALARMPIN, OUTPUT);
-  noBeep(ALARMPIN,
+  beepOff(ALARMPIN,
 #ifdef USE_HIGH_ALARM
          true
 #else
          false
 #endif
         );
-  listSPIFFSFiles(); // Lists the files so you can see what is in the SPIFFS
 
   display.begin();
   display.setFontPosTop();
@@ -222,7 +163,7 @@ void setup() {
   display.clearBuffer();
   display.drawXBM(31, 0, 66, 64, garfield);
   display.sendBuffer();
-  shortBeep(ALARMPIN,
+  beepShort(ALARMPIN,
 #ifdef USE_HIGH_ALARM
             true
 #else
@@ -235,22 +176,15 @@ void setup() {
   delay(1000);
 
   drawProgress("Backlight Level", "Test");
-
-  selfTestBacklight(BACKLIGHTPIN);
+  backlight.selfTest();
 
 #ifdef USE_WIFI_MANAGER
-  drawProgress("连接WIFI:", "IBECloc12864-HW");
+  drawProgress("连接WIFI:", "ESP8266-Setup");
+  connectWiFiWithManager("ESP8266-Setup");
 #else
   drawProgress("连接WIFI中,", "请稍等...");
+  connectWiFi(WIFI_SSIDS, WIFI_PASSWORDS, 3);
 #endif
-
-  connectWIFI(
-#ifdef USE_WIFI_MANAGER
-    true
-#else
-    false
-#endif
-  );
 
   if (WiFi.status() != WL_CONNECTED) ESP.restart();
 
@@ -259,7 +193,7 @@ void setup() {
   Serial.println("WIFI Connected");
 #endif
   drawProgress("连接WIFI成功,", "正在同步时间...");
-  configTime(TZ_SEC, DST_SEC, NTP_SERVER);
+  configTime(TZ_SEC_FOR(8), DST_SEC_FOR(0), DefaultNtpServer);
   setContrastSub();
   drawProgress("同步时间成功,", "正在更新天气数据...");
   updateData(true);
@@ -270,14 +204,6 @@ void setup() {
 void detectButtonPush() {
   int reading;
   reading = digitalRead(BUTTONPIN);
-  if (reading == HIGH)
-  {
-    buttonPushCounter++;
-  }
-  else
-  {
-    buttonPushCounter = 0;
-  }
   if (reading != lastButtonState) {
     lastDebounceTime = millis();
   }
@@ -289,7 +215,7 @@ void detectButtonPush() {
       buttonState = reading;
       if (buttonState == HIGH)
       {
-        shortBeep(ALARMPIN,
+        beepShort(ALARMPIN,
 #ifdef USE_HIGH_ALARM
                   true
 #else
@@ -298,10 +224,6 @@ void detectButtonPush() {
                  );
         draw_state++;
         timeSinceLastPageUpdate = millis();
-      }
-      else
-      {
-        buttonPushCounter = 0;
       }
     }
   }
@@ -319,7 +241,7 @@ void setContrastSub() {
 }
 
 void adjustBacklightSub() {
-  adjustBacklight(lightLevel, BACKLIGHTPIN, displayBias, displayMultiplier);
+  backlight.update(displayBias, displayMultiplier);
 }
 
 void loop() {
@@ -330,7 +252,7 @@ void loop() {
     timeInfo = localtime(&nowTime);
     if (timeInfo->tm_hour >= 0 && timeInfo->tm_hour < 7)
     {
-      turnOffBacklight(BACKLIGHTPIN, 1);
+      backlight.turnOff(displayMinimumLevel);
     }
     else
     {
@@ -357,6 +279,7 @@ void loop() {
   {
     timeSinceLastPageUpdate = millis();
     draw_state++;
+    if (draw_state >= 8) draw_state = 0;
   }
 
 #if (DHTPIN >= 0)
@@ -394,95 +317,58 @@ void loop() {
 }
 
 void draw(void) {
-  detectButtonPush();
-  drawClock();
-  detectButtonPush();
-}
-
-void drawClock(void) {
-  detectButtonPush();
-
-  if (draw_state == 0) // 0 - Garfield,  1 to 20 - RSS page, 21 - Local clock 22 - Fremont clock, 23 - New York clock
-  {
-    display.drawXBM(31, 0, 66, 64, garfield);
-  }
-  else if (draw_state > 0 && draw_state < NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE + NEWS_ENGLISH_SIZE + 1 )
-  {
-    if (draw_state < NEWS_ENGLISH_SIZE + 1)
-    {
-      drawEnglishNews(draw_state);
-    }
-    else
-    {
-      drawChineseNews(draw_state);
-    }
-  }
-  else if (draw_state == NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE + NEWS_ENGLISH_SIZE + 1)
-  {
-    drawLocal();
-  }
-  else if (draw_state == NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE + NEWS_ENGLISH_SIZE + 2)
-  {
-#ifdef SHOW_US_CITIES
-    drawWorldLocation("弗利蒙", usPT, currentWeather2);
-#else
-    drawLocal();
-#endif
-  }
-  else if (draw_state == NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE + NEWS_ENGLISH_SIZE + 3)
-  {
-#ifdef SHOW_US_CITIES
-    drawWorldLocation("纽约", usET, currentWeather1);
-#else
-    drawLocal();
-#endif
-  }
-  else
-  {
-    draw_state = 1;
-  }
-  detectButtonPush();
-}
-
-void updateData(bool isInitialBoot) {
+  // Skip to tomorrow's forecast once today's date no longer matches, or after
+  // 8 PM on the matching day (same rule as the WeatherStation sketch).
+  int forecastBase = 0;
   nowTime = time(nullptr);
   struct tm* timeInfo;
   timeInfo = localtime(&nowTime);
+  String strTempDate = String(forecasts[0].date);
+  strTempDate.trim(); // 2018-08-09
+  int day = (strTempDate.substring(8)).toInt();
+  if (timeInfo->tm_mday != day)
+  {
+    forecastBase = 1;
+  }
+  else if (timeInfo->tm_mday == day && timeInfo->tm_hour > 19)
+  {
+    forecastBase = 1;
+  }
+
+  if (dummyMode)
+  {
+    draw_state = 1;
+  }
+  if (draw_state < 2)
+  {
+    drawLocal();
+  }
+  else if (draw_state < 4)
+  {
+    drawForecastDetails(0 + forecastBase);
+  }
+  else if (draw_state < 6)
+  {
+    drawForecastDetails(1 + forecastBase);
+  }
+  else if (draw_state < 8)
+  {
+    drawForecastDetails(2 + forecastBase);
+  }
+  else
+  {
+    draw_state = 0;
+  }
+}
+
+void updateData(bool isInitialBoot) {
   if (isInitialBoot)
   {
     drawProgress("正在更新...", "本地天气实况...");
   }
-  currentWeatherClient.updateCurrent(&currentWeather, HEWEATHER_APP_ID, HEWEATHER_LOCATION, HEWEATHER_LANGUAGE);
-  if (isInitialBoot || (timeInfo->tm_hour >= weatherBeginHour && timeInfo->tm_hour < weatherEndHour))
-  {
-#ifdef SHOW_US_CITIES
-    delay(300);
-    if (isInitialBoot)
-    {
-      drawProgress("正在更新...", "纽约天气实况...");
-    }
-    currentWeatherClient1.updateCurrent(&currentWeather1, HEWEATHER_APP_ID, HEWEATHER_LOCATION1, HEWEATHER_LANGUAGE);
-    delay(300);
-    if (isInitialBoot)
-    {
-      drawProgress("正在更新...", "弗利蒙天气实况...");
-    }
-    currentWeatherClient2.updateCurrent(&currentWeather2, HEWEATHER_APP_ID, HEWEATHER_LOCATION2, HEWEATHER_LANGUAGE);
-#endif
-  }
-
-  delay(300);
-  if (isInitialBoot)
-  {
-    drawProgress("正在更新...", "英语新闻...");
-  }
-  getEnglishNewsData();
-  delay(300);
-  if (isInitialBoot)
-  {
-    drawProgress("正在更新...", "中文新闻...");
-  }
-  getChineseNewsData();
+  // WeatherAPI.com's forecast.json returns current conditions + forecast in one
+  // request, so both are refreshed together on every update.
+  weatherClient.updateWeather(&currentWeather, forecasts, WEATHERAPI_APP_ID, WEATHERAPI_LOCATION, WEATHERAPI_LANGUAGE, MAX_FORECASTS);
   readyForWeatherUpdate = false;
 }
 
@@ -507,99 +393,6 @@ void drawProgress(String labelLine1, String labelLine2) {
   display.sendBuffer();
 }
 
-void drawChineseNews(int currentNewsLine) {
-  display.enableUTF8Print();
-  display.setFont(u8g2_font_wqy12_t_gb2312); // u8g2_font_wqy12_t_gb2312, u8g2_font_helvB08_tf
-
-  int charsPerLine = 30;
-  String strTemp = newsText[currentNewsLine - 1];
-
-  strTemp.trim();
-  int stringLength = strTemp.length();
-
-  if (stringLength == 0)
-  {
-    draw_state++;
-    return;
-  }
-  if (stringLength > charsPerLine * 5 - 5)
-  {
-    strTemp = strTemp.substring(0, charsPerLine * 5 - 5);
-    strTemp.trim();
-  }
-  int numOfLines = strTemp.length() / charsPerLine + 1;
-
-  for (int i = 0; i < numOfLines; ++i)
-  {
-    int beginPostion = i * charsPerLine;
-    int endPosition = (i + 1) * charsPerLine;
-    if (beginPostion >= stringLength)
-    {
-      exit;
-    }
-    if (endPosition >= stringLength)
-    {
-      endPosition = stringLength;
-    }
-    String strTempLine = strTemp.substring(beginPostion, endPosition);
-    strTempLine.trim();
-    display.setCursor(0, i * 13 + 1);
-    display.print(strTempLine);
-    detectButtonPush();
-  }
-
-  String stringText = String(currentNewsLine) + "/" + String(NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE + NEWS_ENGLISH_SIZE);
-  int stringWidth = display.getUTF8Width(string2char(stringText));
-  display.setCursor(128 - stringWidth, 53);
-  display.print(stringText);
-
-  display.disableUTF8Print();
-}
-
-void drawEnglishNews(int currentNewsLine) {
-  display.setFont(u8g2_font_t0_12b_mf); // width 8, height 11 u8g2_font_t0_12b_mf, 6X11
-  int charsPerLine = 128 / 6;
-  String strTemp = newsText[currentNewsLine - 1];
-
-  strTemp.trim();
-  int stringLength = strTemp.length();
-
-  if (stringLength == 0)
-  {
-    draw_state++;
-    return;
-  }
-  if (stringLength > charsPerLine * 5 - 5)
-  {
-    strTemp = strTemp.substring(0, charsPerLine * 5 - 5);
-    strTemp.trim();
-  }
-  int numOfLines = strTemp.length() / charsPerLine + 1;
-
-  for (int i = 0; i < numOfLines; ++i)
-  {
-    int beginPostion = i * charsPerLine;
-    int endPosition = (i + 1) * charsPerLine;
-    if (beginPostion >= stringLength)
-    {
-      exit;
-    }
-    if (endPosition >= stringLength)
-    {
-      endPosition = stringLength;
-    }
-    String strTempLine = strTemp.substring(beginPostion, endPosition);
-    strTempLine.trim();
-    display.setCursor(0, i * 13 + 1);
-    display.print(strTempLine);
-    detectButtonPush();
-  }
-  String stringText = String(currentNewsLine) + "/" + String(NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE + NEWS_ENGLISH_SIZE);
-  int stringWidth = display.getStrWidth(string2char(stringText));
-  display.setCursor(128 - stringWidth, 53);
-  display.print(stringText);
-}
-
 void drawLocal() {
   nowTime = time(nullptr);
   struct tm* timeInfo;
@@ -612,30 +405,29 @@ void drawLocal() {
   int stringWidth = display.getUTF8Width(string2char(stringText));
   display.setCursor((128 - stringWidth) / 2, 1);
   display.print(stringText);
-  stringWidth = display.getUTF8Width(string2char(String(currentWeather.cond_txt)));
+  stringWidth = display.getUTF8Width(string2char(String(currentWeather.text)));
   display.setCursor((128 - stringWidth) / 2, 40);
-  display.print(String(currentWeather.cond_txt));
-  String WindDirectionAndSpeed = windDirectionTranslate(currentWeather.wind_dir) + String(currentWeather.wind_sc) + "级";
+  display.print(String(currentWeather.text));
+  String WindDirectionAndSpeed = translateWindDirectionToChinese(currentWeather.wind_dir) + String(currentWeather.wind_kph) + "km/h";
   stringWidth = display.getUTF8Width(string2char(WindDirectionAndSpeed));
   display.setCursor((128 - stringWidth) / 2, 54);
   display.print(WindDirectionAndSpeed);
   display.disableUTF8Print();
   display.setFont(u8g2_font_helvR24_tn); // u8g2_font_inb21_ mf, u8g2_font_helvR24_tn
-  //  sprintf_P(buff, PSTR("%02d:%02d:%02d"), timeInfo->tm_hour, timeInfo->tm_min, timeInfo->tm_sec);
   sprintf_P(buff, PSTR("%02d:%02d"), timeInfo->tm_hour, timeInfo->tm_min);
   stringWidth = display.getStrWidth(buff);
   display.drawStr((128 - 30 - stringWidth) / 2, 11, buff);
 
   display.setFont(Meteocon21);
-  display.drawStr(98, 17, string2char(chooseMeteocon(currentWeather.iconMeteoCon)));
+  display.drawStr(98, 17, string2char(chooseMeteoconChar(currentWeather.iconMeteoCon)));
 
   display.setFont(u8g2_font_helvR08_tf);
-  String temp = String(currentWeather.tmp) + degree + "C";
+  String temp = String(currentWeather.temp_c, 0) + degree + "C";
   display.drawStr(0, 53, string2char(temp));
 
   display.setFont(u8g2_font_helvR08_tf);
-  stringWidth = display.getStrWidth(string2char((String(currentWeather.hum) + "%")));
-  display.drawStr(127 - stringWidth, 53, string2char((String(currentWeather.hum) + "%")));
+  stringWidth = display.getStrWidth(string2char((String(currentWeather.humidity) + "%")));
+  display.drawStr(127 - stringWidth, 53, string2char((String(currentWeather.humidity) + "%")));
 
   display.setFont(u8g2_font_helvB08_tf);
   if (previousTemp != 0 && previousHumidity != 0)
@@ -651,273 +443,73 @@ void drawLocal() {
   display.drawHLine(0, 51, 128);
 }
 
-#ifdef SHOW_US_CITIES
-void drawWorldLocation(String stringText, Timezone tztTimeZone, HeWeatherCurrentData currentWeather) {
-  time_t utc = time(nullptr) - TZ_SEC;
-  TimeChangeRule *tcr;        // pointer to the time change rule, use to get the TZ abbrev
-  time_t t = tztTimeZone.toLocal(utc, &tcr);
-  char buff[5];
-  sprintf(buff, "%02d:%02d", hour(t), minute(t));
+void drawForecastDetails(int dayIndex) {
+  if (dayIndex < 0 || dayIndex >= MAX_FORECASTS) dayIndex = 0;
+  String strTempDate = String(forecasts[dayIndex].date);
+  strTempDate.trim(); // 2018-08-09
+  int year = (strTempDate.substring(0, 4)).toInt();
+  int month = (strTempDate.substring(5, 7)).toInt();
+  int day = (strTempDate.substring(8)).toInt();
+  struct tm *idotmpstruct, timetmps32;
+  time_t observationTimestamp;
+  observationTimestamp = 0;
+  idotmpstruct = &timetmps32;
+  idotmpstruct->tm_year = year - 1900;
+  idotmpstruct->tm_mon = month - 1;
+  idotmpstruct->tm_mday = day;
+  idotmpstruct->tm_hour = 1;
+  idotmpstruct->tm_min = 0;
+  idotmpstruct->tm_sec = 0;
+  idotmpstruct->tm_wday = 0;  /*/dummy */
+  observationTimestamp = mktime(idotmpstruct);   /*/elllit timestamp */
+  struct tm* timeInfo;
+  timeInfo = localtime(&observationTimestamp);
+
   display.enableUTF8Print();
   display.setFont(u8g2_font_wqy12_t_gb2312); // u8g2_font_wqy12_t_gb2312, u8g2_font_helvB08_tf
-  String stringTemp = stringText + String(month(t)) + "月" + String(day(t)) + "日" + " " + WDAY_NAMES[weekday(t) - 1].c_str();
-  int stringWidth = display.getUTF8Width(string2char(stringTemp));
-  display.setCursor((128 - stringWidth) / 2, 1);
-  display.print(stringTemp);
-  stringWidth = display.getUTF8Width(string2char(String(currentWeather.cond_txt)));
-  display.setCursor((128 - stringWidth) / 2, 40);
-  display.print(String(currentWeather.cond_txt));
-  String WindDirectionAndSpeed = windDirectionTranslate(currentWeather.wind_dir) + String(currentWeather.wind_sc) + "级";
-  stringWidth = display.getUTF8Width(string2char(WindDirectionAndSpeed));
-  display.setCursor((128 - stringWidth) / 2, 54);
-  display.print(WindDirectionAndSpeed);
+  String stringText = " " + String(timeInfo->tm_mon + 1) + "月" + String(timeInfo->tm_mday) + "日 " + String(WDAY_NAMES[timeInfo->tm_wday].c_str());
+  int stringWidth = display.getUTF8Width(string2char(stringText));
+  display.setCursor(0, 1);
+  display.print(stringText);
+
+  // WeatherAPI.com's daily forecast has one overall condition, not a separate
+  // day/night pair.
+  stringText = String("天气:" + forecasts[dayIndex].text);
+  stringText.replace("\"", "");
+  stringText.trim();
+  if (stringText.length() > 21)
+  {
+    stringText = stringText.substring(0, 21);
+    stringText.trim();
+  }
+  display.setCursor(26, 24);
+  display.print(stringText);
+
+  // WeatherAPI.com's daily forecast gives a peak wind speed only, no
+  // direction (direction is only available at hourly granularity).
+  stringText = String(forecasts[dayIndex].maxwind_kph, 0) + "km/h";
+  stringWidth = display.getUTF8Width(string2char(stringText));
+  display.setCursor(0, 54);
+  display.print(stringText);
   display.disableUTF8Print();
 
-  display.setFont(u8g2_font_helvR24_tn);
-  //  stringTemp = String(hour(t)) + ":" + String(minute(t));
-  stringWidth = display.getStrWidth(buff);
-  display.drawStr((128 - 30 - stringWidth) / 2, 11, buff);
-  String temp = String(currentWeather.tmp) + degree + "C";
   display.setFont(u8g2_font_helvR08_tf);
-  display.drawStr(0, 53, string2char(temp));
-  String tempHumidity = String(currentWeather.hum) + "%";
-  stringWidth = display.getStrWidth(string2char(tempHumidity));
-  display.setFont(u8g2_font_helvR08_tf);
-  display.drawStr(128 - stringWidth, 53, string2char(tempHumidity));
-  display.drawHLine(0, 51, 128);
+  stringText = String(forecasts[dayIndex].avghumidity) + "%";
+  stringWidth = display.getStrWidth(string2char(stringText));
+  display.drawStr(128 - stringWidth, 1, string2char(stringText));
+
+  stringText = String(forecasts[dayIndex].maxtemp_c, 0) + degree + "C";
+  stringWidth = display.getStrWidth(string2char(stringText));
+  display.drawStr(128 - stringWidth, 18, string2char(stringText));
+
+  stringText = String(forecasts[dayIndex].mintemp_c, 0) + degree + "C";
+  stringWidth = display.getStrWidth(string2char(stringText));
+  display.drawStr(128 - stringWidth, 35, string2char(stringText));
+
+  stringText = String(String(forecasts[dayIndex].totalprecip_mm, 1) + "mm") + "  " + String(forecasts[dayIndex].chanceOfRain) + "%";
+  stringWidth = display.getStrWidth(string2char(stringText));
+  display.drawStr(128 - stringWidth, 53, string2char(stringText));
 
   display.setFont(Meteocon21);
-  display.drawStr(98, 17, string2char(String(currentWeather.iconMeteoCon).substring(0, 1)));
-}
-#endif
-
-void getChineseNewsDataDetails(char NewsServer[], char NewsURL[], int beginLine, int lineSizeLimit) {
-  int tempBeginLine = beginLine;
-  /*
-    WiFiClientSecure client;
-    int httpport = 443;
-  */
-  if (WiFi.status() != WL_CONNECTED) return;
-
-  WiFiClient client;
-  int httpport = 80;
-
-  String line = "";
-#ifdef DEBUG
-  Serial.print(">> Connecting to ");
-  Serial.println(NewsServer);
-#endif
-  int retryCounter = 0;
-  while (!client.connect(NewsServer, httpport))
-  {
-#ifdef DEBUG
-    Serial.println(".");
-#endif    delay(1000);
-    retryCounter++;
-    if (retryCounter > 10)
-    {
-      client.stop();
-      return;
-    }
-  }
-
-  String url = NewsURL;
-#ifdef DEBUG
-  Serial.print(">> Requesting URL: ");
-  Serial.println(NewsURL);
-  Serial.println("");
-#endif
-  client.print(String("GET ") + url + " HTTP/1.1\r\n" + "Host: " + NewsServer + "\r\nUser-Agent: IBEDevices-ESP8266\r\n" +  "Connection: close\r\n\r\n");
-
-  unsigned long timeout = millis();
-  while (client.available() == 0) {
-    if (millis() - timeout > 30000) {
-#ifdef DEBUG
-      Serial.println(">> Client Timeout !");
-#endif
-      client.stop();
-      return;
-    }
-  }
-
-  int lineCount = 0;
-  while (client.available())
-  {
-    line = client.readStringUntil('!');
-    const String titleBeginMark = "[CDATA[";
-    const String titleEndMark = "</title>";
-    int titleBeginPos = 0;
-    int titleEndPos = line.indexOf(titleEndMark);
-    if (titleEndPos > -1)
-    {
-      line.replace("&#x2019;", "\'");                        //replace special characters
-      line.replace("&#39;", "\'");
-      line.replace("&apos;", "\'");
-      line.replace("&amp;", "&");
-      line.replace("&quot;", "\"");
-      line.replace("&gt;", ">");
-      line.replace("&lt;", "<");
-      line.replace(titleBeginMark, "");
-      line.replace(titleEndMark, "");
-      line.trim();
-      line = line.substring(titleBeginPos, titleEndPos - titleBeginPos);
-      line.replace("]]>", "");
-      if (line.indexOf("时政频道") < 0 && line.indexOf("时政新闻") < 0 && line.indexOf("Copyright") < 0 && line.indexOf("国际频道") < 0 && line.indexOf("国际新闻") < 0)
-      {
-        line.trim();
-#ifdef DEBUG
-        Serial.print("Title ");
-        Serial.print(lineCount);
-        Serial.println(": " + line);
-#endif
-        newsText[tempBeginLine] = line;
-        tempBeginLine++;
-        lineCount++;
-      }
-    }
-    if (lineCount >= lineSizeLimit)
-    {
-      client.stop();
-      return;
-    }
-    line = "";
-  }
-#ifdef DEBUG
-  Serial.println();
-  Serial.println("closing connection");
-#endif
-  client.stop();
-}
-
-void getEnglishNewsDataDetails(char NewsServer[], char NewsURL[], int beginLine, int lineSizeLimit) {
-  int tempBeginLine = beginLine;
-  /*
-    WiFiClientSecure client;
-    int httpport = 443;
-  */
-  if (WiFi.status() != WL_CONNECTED) return;
-
-  WiFiClient client;
-  int httpport = 80;
-
-  String line = "";
-#ifdef DEBUG
-  Serial.print(">> Connecting to ");
-  Serial.println(NewsServer);
-#endif
-  int retryCounter = 0;
-  while (!client.connect(NewsServer, httpport))
-  {
-#ifdef DEBUG
-    Serial.println(".");
-#endif    delay(1000);
-    retryCounter++;
-    if (retryCounter > 10)
-    {
-      client.stop();
-      return;
-    }
-  }
-  String url = NewsURL;
-#ifdef DEBUG
-  Serial.print(">> Requesting URL: ");
-  Serial.println(NewsURL);
-  Serial.println("");
-#endif
-  client.print(String("GET ") + url + " HTTP/1.1\r\n" + "Host: " + NewsServer + "\r\nUser-Agent: Mozilla/5.0\r\n" +  "Connection: close\r\n\r\n");
-
-  unsigned long timeout = millis();
-  while (client.available() == 0) {
-    if (millis() - timeout > 30000) {
-#ifdef DEBUG
-      Serial.println(">> Client Timeout !");
-#endif
-      client.stop();
-      return;
-    }
-  }
-  client.setTimeout(30000);
-  int lineCount = 0;
-  while (client.available())
-  {
-    line = client.readStringUntil('\n');
-    const String titleBeginMark = "<title>";
-    const String titleEndMark = "</title>";
-    if (line.indexOf(titleBeginMark) > -1 && line.indexOf(titleEndMark) > -1)
-    {
-      line.replace("&#x2019;", "\'");                        //replace special characters
-      line.replace("&#39;", "\'");
-      line.replace("&apos;", "\'");
-      line.replace("’", "\'");
-      line.replace("‘", "\'");
-      line.replace("&amp;", "&");
-      line.replace("&quot;", "\"");
-      line.replace("&gt;", ">");
-      line.replace("&lt;", "<");
-      line.replace(titleBeginMark, "");
-      line.replace(titleEndMark, "");
-      line.trim();
-      if (line.indexOf("USATODAY - News Top") < 0 && line.indexOf("GANNETT Syndication") < 0)
-      {
-        line.replace("&nbsp;", " ");
-        line.replace("&apos;", "\'");
-        line.replace("&lsquo;", "\'");
-        line.replace("&rsquo;", "\'");
-        line.replace("&ldquo;", "\"");
-        line.replace("&rdquo;", "\"");
-#ifdef DEBUG
-        Serial.print("Title ");
-        Serial.print(lineCount);
-        Serial.print(": ");
-        Serial.println(line);
-#endif
-        newsText[tempBeginLine] = line;
-        tempBeginLine++;
-        lineCount++;
-      }
-    }
-    if (line.substring(0, 6) == titleBeginMark)
-    {
-      line.replace(titleBeginMark, "");
-      line.trim();
-      if (line.indexOf("Yahoo News - Latest") < 0)
-      {
-#ifdef DEBUG
-        Serial.print("Title ");
-        Serial.print(lineCount);
-        Serial.print(": ");
-        Serial.println(line);
-#endif
-        newsText[tempBeginLine] = line;
-        tempBeginLine++;
-        lineCount++;
-      }
-    }
-    if (lineCount >= lineSizeLimit)
-    {
-      client.stop();
-      return;
-    }
-    line = "";
-  }
-#ifdef DEBUG
-  Serial.println();
-  Serial.println("closing connection");
-#endif
-  client.stop();
-}
-
-void getEnglishNewsData() {
-  // http://rssfeeds.usatoday.com/usatoday-newstopstories&x=1
-  char newsDataServer[] = "rssfeeds.usatoday.com";
-
-  getEnglishNewsDataDetails(newsDataServer, "/usatoday-newstopstories&x=1", 0, NEWS_ENGLISH_SIZE); // NEWS_POLITICS_SIZE + NEWS_WORLD_SIZE, NEWS_ENGLISH_SIZE
-}
-
-void getChineseNewsData() {
-  // http://www.people.com.cn/rss/politics.xml world.xml
-  char newsDataServer[] = "www.people.com.cn";
-
-  getChineseNewsDataDetails(newsDataServer, "/rss/world.xml", NEWS_ENGLISH_SIZE, NEWS_WORLD_SIZE);
-  getChineseNewsDataDetails(newsDataServer, "/rss/politics.xml", NEWS_ENGLISH_SIZE + NEWS_WORLD_SIZE, NEWS_POLITICS_SIZE);
+  display.drawStr(0, 19, string2char(String(forecasts[dayIndex].iconMeteoCon).substring(0, 1)));
 }
