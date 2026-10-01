@@ -23,3 +23,8 @@ need the old HeWeather version, check out a commit before 2026-09.
 3. `DISPLAY_TYPE` selects the panel variant (see wiring.txt).
 4. The `data/` folder holds SPIFFS image assets; upload with the ESP8266FS tool
    if your build uses them.
+
+
+## License
+
+This project is free software, released under the **GNU General Public License v3.0**. You may redistribute and/or modify it under those terms; see [LICENSE.md](LICENSE.md) for the full text.
